@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GiftBot Casino</title>
+    
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- TON Connect UI -->
+    <script src="https://unpkg.com/@tonconnect/ui@2.0.6/dist/tonconnect-ui.min.js"></script>
+    
+    <!-- Ethers.js -->
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-top">
+                <div class="logo">
+                    <span class="logo-icon">🎰</span>
+                    <span class="logo-text">GiftBot</span>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" onclick="showSettings()">⚙️</button>
+                </div>
+            </div>
+            <div class="balance-card">
+                <div class="balance-info">
+                    <span class="balance-label">Баланс</span>
+                    <span class="balance-value" id="balance-value">0</span>
+                    <span class="balance-currency">⭐</span>
+                </div>
+                <button class="deposit-btn" onclick="switchTab('wallet')">
+                    <span>+</span> Пополнить
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Daily Bonus Banner -->
+            <section class="daily-bonus" id="daily-bonus" onclick="claimDailyBonus()">
+                <div class="bonus-left">
+                    <span class="bonus-icon">🎁</span>
+                    <div class="bonus-text">
+                        <span class="bonus-title">Ежедневный бонус</span>
+                        <span class="bonus-subtitle" id="bonus-status">Доступен!</span>
+                    </div>
+                </div>
+                <div class="bonus-right">
+                    <span class="bonus-amount" id="bonus-amount">+50 ⭐</span>
+                    <span class="bonus-streak" id="bonus-streak">День 1</span>
+                </div>
+            </section>
+
+            <!-- Live Jackpot -->
+            <section class="jackpot-banner">
+                <div class="jackpot-glow"></div>
+                <span class="jackpot-label">🏆 ДЖЕКПОТ</span>
+                <span class="jackpot-value" id="jackpot-value">12,450</span>
+                <span class="jackpot-currency">⭐</span>
+            </section>
+
+            <!-- Games Section -->
+            <section class="section" id="section-games">
+                <div class="section-header">
+                    <h2>🎮 Игры</h2>
+                </div>
+                <div class="games-carousel">
+                    <div class="game-card featured" onclick="openGame('slots')">
+                        <div class="game-badge">ХИТ</div>
+                        <div class="game-visual">🎰</div>
+                        <div class="game-info">
+                            <h3>Слоты</h3>
+                            <p>до x50</p>
+                        </div>
+                    </div>
+                    <div class="game-card" onclick="openGame('coinflip')">
+                        <div class="game-visual">🪙</div>
+                        <div class="game-info">
+                            <h3>Монетка</h3>
+                            <p>x1.95</p>
+                        </div>
+                    </div>
+                    <div class="game-card" onclick="openGame('crash')">
+                        <div class="game-badge new">NEW</div>
+                        <div class="game-visual">🚀</div>
+                        <div class="game-info">
+                            <h3>Краш</h3>
+                            <p>до x100</p>
+                        </div>
+                    </div>
+                    <div class="game-card" onclick="openGame('dice')">
+                        <div class="game-visual">🎲</div>
+                        <div class="game-info">
+                            <h3>Кости</h3>
+                            <p>x2 - x6</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cases Section -->
+            <section class="section" id="section-cases">
+                <div class="section-header">
+                    <h2>📦 Кейсы</h2>
+                    <a href="#" onclick="showAllCases()">Все →</a>
+                </div>
+                <div class="cases-grid">
+                    <div class="case-card tier-common" onclick="openCase('starter')">
+                        <div class="case-glow"></div>
+                        <div class="case-icon">📦</div>
+                        <div class="case-name">Стартовый</div>
+                        <div class="case-price">10 ⭐</div>
+                    </div>
+                    <div class="case-card tier-rare" onclick="openCase('premium')">
+                        <div class="case-glow"></div>
+                        <div class="case-icon">🎁</div>
+                        <div class="case-name">Премиум</div>
+                        <div class="case-price">50 ⭐</div>
+                    </div>
+                    <div class="case-card tier-epic" onclick="openCase('mega')">
+                        <div class="case-glow"></div>
+                        <div class="case-icon">💎</div>
+                        <div class="case-name">Мега</div>
+                        <div class="case-price">100 ⭐</div>
+                    </div>
+                    <div class="case-card tier-legendary" onclick="openCase('legendary')">
+                        <div class="case-badge">🔥</div>
+                        <div class="case-glow"></div>
+                        <div class="case-icon">👑</div>
+                        <div class="case-name">Легенда</div>
+                        <div class="case-price">500 ⭐</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Actions -->
+            <section class="section" id="section-quick">
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="switchTab('inventory')">
+                        <span class="quick-icon">🎒</span>
+                        <span class="quick-label">Инвентарь</span>
+                        <span class="quick-badge" id="inv-count">0</span>
+                    </button>
+                    <button class="quick-btn" onclick="switchTab('history')">
+                        <span class="quick-icon">📜</span>
+                        <span class="quick-label">История</span>
+                    </button>
+                    <button class="quick-btn" onclick="switchTab('leaderboard')">
+                        <span class="quick-icon">🏆</span>
+                        <span class="quick-label">Топ</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Achievements Section -->
+            <section class="section" id="section-achievements">
+                <div class="section-header">
+                    <h2>🏅 Достижения</h2>
+                    <span class="achievements-progress" id="ach-progress">0/12</span>
+                </div>
+                <div class="achievements-scroll">
+                    <div class="achievement-card locked" data-id="first_win">
+                        <span class="ach-icon">🎯</span>
+                        <span class="ach-name">Первая победа</span>
+                        <span class="ach-reward">+10 ⭐</span>
+                    </div>
+                    <div class="achievement-card locked" data-id="streak_3">
+                        <span class="ach-icon">🔥</span>
+                        <span class="ach-name">3 дня подряд</span>
+                        <span class="ach-reward">+50 ⭐</span>
+                    </div>
+                    <div class="achievement-card locked" data-id="big_win">
+                        <span class="ach-icon">💰</span>
+                        <span class="ach-name">Выигрыш 500⭐</span>
+                        <span class="ach-reward">+100 ⭐</span>
+                    </div>
+                    <div class="achievement-card locked" data-id="collector">
+                        <span class="ach-icon">📦</span>
+                        <span class="ach-name">10 кейсов</span>
+                        <span class="ach-reward">+75 ⭐</span>
+                    </div>
+                    <div class="achievement-card locked" data-id="jackpot">
+                        <span class="ach-icon">👑</span>
+                        <span class="ach-name">Джекпот</span>
+                        <span class="ach-reward">+500 ⭐</span>
+                    </div>
+                    <div class="achievement-card locked" data-id="referral">
+                        <span class="ach-icon">👥</span>
+                        <span class="ach-name">5 рефералов</span>
+                        <span class="ach-reward">+200 ⭐</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Support Banner -->
+            <section class="support-banner">
+                <span class="support-text">Нужна помощь?</span>
+                <a href="https://t.me/valuueee" class="support-link">💬 @valuueee</a>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-tab="home" onclick="switchTab('home')">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Главная</span>
+            </button>
+            <button class="nav-item" data-tab="games" onclick="switchTab('games')">
+                <span class="nav-icon">🎮</span>
+                <span class="nav-label">Игры</span>
+            </button>
+            <button class="nav-item" data-tab="wallet" onclick="switchTab('wallet')">
+                <span class="nav-icon">💳</span>
+                <span class="nav-label">Кошелёк</span>
+            </button>
+            <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">Профиль</span>
+            </button>
+        </nav>
+
+        <!-- Modals/Overlays -->
+        <div class="overlay" id="overlay" onclick="closeOverlay()"></div>
+        
+        <!-- Game Modal -->
+        <div class="modal" id="game-modal">
+            <div class="modal-header">
+                <h3 id="game-title">Игра</h3>
+                <button class="close-btn" onclick="closeGame()">✕</button>
+            </div>
+            <div class="modal-body" id="game-body"></div>
+        </div>
+
+        <!-- Wallet Modal -->
+        <div class="modal" id="wallet-modal">
+            <div class="modal-header">
+                <h3>💳 Кошелёк</h3>
+                <button class="close-btn" onclick="closeWallet()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="wallet-section">
+                    <h4>Подключить кошелёк</h4>
+                    <div class="wallet-options">
+                        <button class="wallet-option" id="ton-wallet-btn" onclick="connectTON()">
+                            <img src="https://ton.org/download/ton_symbol.svg" alt="TON" width="32">
+                            <span>TON Wallet</span>
+                            <span class="wallet-status" id="ton-status">Не подключен</span>
+                        </button>
+                        <button class="wallet-option" onclick="connectMetamask()">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="Metamask" width="32">
+                            <span>Metamask</span>
+                            <span class="wallet-status" id="eth-status">Не подключен</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="wallet-section">
+                    <h4>Пополнить баланс</h4>
+                    <div class="amount-grid">
+                        <button class="amount-btn" onclick="selectDeposit(50)">50 ⭐</button>
+                        <button class="amount-btn" onclick="selectDeposit(100)">100 ⭐</button>
+                        <button class="amount-btn popular" onclick="selectDeposit(500)">500 ⭐</button>
+                        <button class="amount-btn" onclick="selectDeposit(1000)">1000 ⭐</button>
+                    </div>
+                    <button class="primary-btn" id="deposit-btn" onclick="processDeposit()" disabled>
+                        Пополнить
+                    </button>
+                </div>
+                <div class="wallet-section">
+                    <h4>💸 Вывод средств</h4>
+                    <button class="primary-btn withdraw-btn-wallet" onclick="closeWallet(); openWithdraw();">
+                        Вывести средства
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Modal -->
+        <div class="modal" id="profile-modal">
+            <div class="modal-header">
+                <h3>👤 Профиль</h3>
+                <button class="close-btn" onclick="closeProfile()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-header">
+                    <div class="avatar" id="user-avatar">🎮</div>
+                    <div class="user-info">
+                        <h4 id="user-name">Игрок</h4>
+                        <span class="user-id" id="user-id">ID: ---</span>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-games">0</span>
+                        <span class="stat-label">Игр</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-wins">0</span>
+                        <span class="stat-label">Побед</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-profit">0</span>
+                        <span class="stat-label">Профит</span>
+                    </div>
+                </div>
+                <div class="history-section">
+                    <h4>Последние игры</h4>
+                    <div class="history-list" id="history-list">
+                        <div class="empty-state">Пока нет игр</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Modal -->
+        <div class="modal" id="inventory-modal">
+            <div class="modal-header">
+                <h3>🎒 Инвентарь</h3>
+                <button class="close-btn" onclick="closeInventory()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="inventory-stats">
+                    <div class="inv-stat">
+                        <span class="inv-stat-value" id="inv-total-items">0</span>
+                        <span class="inv-stat-label">Предметов</span>
+                    </div>
+                    <div class="inv-stat">
+                        <span class="inv-stat-value" id="inv-total-value">0 ⭐</span>
+                        <span class="inv-stat-label">Общая стоимость</span>
+                    </div>
+                </div>
+                <div class="inventory-grid" id="inventory-grid">
+                    <div class="empty-state">Инвентарь пуст. Открывайте кейсы!</div>
+                </div>
+                <button class="primary-btn" id="withdraw-all-btn" onclick="withdrawAll()" style="margin-top: 16px; display: none;">
+                    💸 Вывести всё на баланс
+                </button>
+            </div>
+        </div>
+
+        <!-- History Modal -->
+        <div class="modal" id="history-modal">
+            <div class="modal-header">
+                <h3>📜 История игр</h3>
+                <button class="close-btn" onclick="closeHistory()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="history-filters">
+                    <button class="filter-btn active" onclick="filterHistory('all')">Все</button>
+                    <button class="filter-btn" onclick="filterHistory('wins')">Победы</button>
+                    <button class="filter-btn" onclick="filterHistory('losses')">Проигрыши</button>
+                </div>
+                <div class="full-history-list" id="full-history-list">
+                    <div class="empty-state">История пуста</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Modal -->
+        <div class="modal" id="leaderboard-modal">
+            <div class="modal-header">
+                <h3>🏆 Топ игроков</h3>
+                <button class="close-btn" onclick="closeLeaderboard()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="leaderboard-tabs">
+                    <button class="lb-tab active" onclick="switchLeaderboard('profit')">💰 По профиту</button>
+                    <button class="lb-tab" onclick="switchLeaderboard('wins')">🏆 По победам</button>
+                    <button class="lb-tab" onclick="switchLeaderboard('games')">🎮 По играм</button>
+                </div>
+                <div class="leaderboard-list" id="leaderboard-list">
+                    <!-- Filled by JS -->
+                </div>
+                <div class="your-position" id="your-position">
+                    <span>Твоя позиция:</span>
+                    <span id="your-rank">#---</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Withdraw Modal -->
+        <div class="modal" id="withdraw-modal">
+            <div class="modal-header">
+                <h3>💸 Вывод средств</h3>
+                <button class="close-btn" onclick="closeWithdraw()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="withdraw-balance">
+                    <span>Доступно для вывода:</span>
+                    <span class="withdraw-amount" id="withdraw-available">0 ⭐</span>
+                </div>
+                <div class="withdraw-options">
+                    <button class="withdraw-option" onclick="selectWithdrawMethod('ton')">
+                        <img src="https://ton.org/download/ton_symbol.svg" alt="TON" width="32">
+                        <span>TON Wallet</span>
+                        <span class="withdraw-rate">1 TON = 1000 ⭐</span>
+                    </button>
+                    <button class="withdraw-option" onclick="selectWithdrawMethod('stars')">
+                        <span style="font-size: 32px;">⭐</span>
+                        <span>Telegram Stars</span>
+                        <span class="withdraw-rate">Минимум 100 ⭐</span>
+                    </button>
+                </div>
+                <div class="withdraw-input-section" id="withdraw-input-section" style="display: none;">
+                    <label>Сумма вывода (⭐)</label>
+                    <input type="number" id="withdraw-amount-input" min="100" placeholder="Введите сумму">
+                    <button class="primary-btn" onclick="processWithdraw()">Вывести</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div class="toast" id="toast">
+            <span id="toast-icon">✓</span>
+            <span id="toast-text">Сообщение</span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

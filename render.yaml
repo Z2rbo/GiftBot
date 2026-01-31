@@ -1,0 +1,16 @@
+# Render Blueprint for GiftBot
+services:
+  - type: worker
+    name: giftbot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0

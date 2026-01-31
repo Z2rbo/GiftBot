@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  giftbot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+      - WEBAPP_URL=${WEBAPP_URL}
+    volumes:
+      - ./bot_database.db:/app/bot_database.db
