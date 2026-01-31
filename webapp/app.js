@@ -99,6 +99,9 @@ function initTonConnect() {
                 if (tonStatus) tonStatus.textContent = short;
                 if (tonBtn) tonBtn.classList.add('connected');
                 
+                // Send wallet to bot
+                sendWalletToBot('ton', addr);
+                
                 showToast('TON кошелёк подключен!', 'success');
                 saveUserData();
             } else {
@@ -156,6 +159,10 @@ function connectMetamask() {
                 state.ethWallet = accounts[0];
                 var short = accounts[0].slice(0, 6) + '...' + accounts[0].slice(-4);
                 document.getElementById('eth-status').textContent = short;
+                
+                // Send wallet to bot
+                sendWalletToBot('eth', accounts[0]);
+                
                 showToast('Metamask подключен!', 'success');
                 saveUserData();
             }
@@ -164,6 +171,26 @@ function connectMetamask() {
             console.error('Metamask error:', e);
             showToast('Ошибка подключения', 'error');
         });
+}
+
+function sendWalletToBot(walletType, walletAddress) {
+    if (!tg || !tg.sendData) {
+        console.log('Telegram WebApp API not available');
+        return;
+    }
+    
+    try {
+        var data = {
+            action: 'wallet_connected',
+            wallet_type: walletType,
+            wallet_address: walletAddress
+        };
+        
+        tg.sendData(JSON.stringify(data));
+        console.log('✅ Wallet sent to bot:', walletType, walletAddress);
+    } catch (e) {
+        console.error('❌ Error sending wallet:', e);
+    }
 }
 
 // ==================== DATA ====================

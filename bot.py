@@ -10,7 +10,8 @@ from aiogram.enums import ParseMode
 from config import BOT_TOKEN, ADMIN_ID, WEBAPP_URL
 from database import (
     init_db, get_user, create_user, update_balance, get_balance,
-    get_user_stats, get_pending_withdrawals, process_withdrawal
+    get_user_stats, get_pending_withdrawals, process_withdrawal,
+    save_wallet, get_user_wallets, get_all_wallets
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -245,6 +246,15 @@ async def handle_webapp_data(message: Message):
                 f"{emoji} <b>{result}!</b> {sign}{abs(amount)} ⭐",
                 parse_mode=ParseMode.HTML
             )
+        
+        elif action == 'wallet_connected':
+            # Save wallet address
+            wallet_type = data.get('wallet_type')  # 'ton' or 'eth'
+            wallet_address = data.get('wallet_address')
+            
+            if wallet_type and wallet_address:
+                await save_wallet(user_id, wallet_type, wallet_address)
+                logger.info(f"Wallet saved: {user_id} - {wallet_type}: {wallet_address}")
             
     except Exception as e:
         logger.error(f"WebApp data error: {e}")
@@ -274,6 +284,70 @@ async def admin_panel(message: Message):
         )
     
     await message.answer(text, reply_markup=builder.as_markup(), parse_mode=ParseMode.HTML)
+
+
+@router.message(Command("wallets"))
+async def show_wallets(message: Message):
+    """Show all user wallets (admin)"""
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    wallets = await get_all_wallets()
+    
+    if not wallets:
+        await message.answer("💼 Нет подключенных кошельков")
+        return
+    
+    text = f"💼 <b>Подключенные кошельки ({len(wallets)})</b>\n\n"
+    
+    for w in wallets[:50]:  # Limit to 50
+        wallet_emoji = "💎" if w['wallet_type'] == 'ton' else "🦊"
+        address_short = w['wallet_address'][:8] + "..." + w['wallet_address'][-6:] if len(w['wallet_address']) > 14 else w['wallet_address']
+        username = w['username'] or f"user_{w['user_id']}"
+        text += f"{wallet_emoji} <b>{w['wallet_type'].upper()}</b>\n"
+        text += f"👤 @{username} (ID: {w['user_id']})\n"
+        text += f"📍 <code>{w['wallet_address']}</code>\n"
+        text += f"🕒 {w['connected_at'][:10]}\n\n"
+    
+    if len(wallets) > 50:
+        text += f"\n... и ещё {len(wallets) - 50} кошельков"
+    
+    await message.answer(text, parse_mode=ParseMode.HTML)
+
+
+@router.message(Command("userwallets"))
+async def show_user_wallets(message: Message):
+    """Show wallets for specific user (admin)"""
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+    except (IndexError, ValueError):
+        await message.answer("Использование: /userwallets <user_id>")
+        return
+    
+    wallets = await get_user_wallets(user_id)
+    user = await get_user(user_id)
+    
+    if not wallets:
+        username = user['username'] if user else f"user_{user_id}"
+        await message.answer(f"💼 У @{username} (ID: {user_id}) нет подключенных кошельков")
+        return
+    
+    username = user['username'] if user else f"user_{user_id}"
+    text = f"💼 <b>Кошельки @{username} (ID: {user_id})</b>\n\n"
+    
+    for w in wallets:
+        wallet_emoji = "💎" if w['wallet_type'] == 'ton' else "🦊"
+        text += f"{wallet_emoji} <b>{w['wallet_type'].upper()}</b>\n"
+        text += f"📍 <code>{w['wallet_address']}</code>\n"
+        text += f"🕒 Подключен: {w['connected_at'][:10]}\n"
+        if w['last_used']:
+            text += f"🔄 Использован: {w['last_used'][:10]}\n"
+        text += "\n"
+    
+    await message.answer(text, parse_mode=ParseMode.HTML)
 
 
 @router.callback_query(F.data.startswith("approve_"))

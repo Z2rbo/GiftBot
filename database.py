@@ -63,6 +63,20 @@ async def init_db():
             )
         """)
         
+        # Wallets table
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS wallets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                wallet_type TEXT,
+                wallet_address TEXT,
+                connected_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_used TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                UNIQUE(user_id, wallet_type, wallet_address)
+            )
+        """)
+        
         await db.commit()
 
 
@@ -189,6 +203,40 @@ async def process_withdrawal(withdrawal_id: int, status: str):
             (status, datetime.now().isoformat(), withdrawal_id)
         )
         await db.commit()
+
+
+async def save_wallet(user_id: int, wallet_type: str, wallet_address: str):
+    """Save or update user wallet"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO wallets (user_id, wallet_type, wallet_address, last_used)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        """, (user_id, wallet_type, wallet_address))
+        await db.commit()
+
+
+async def get_user_wallets(user_id: int):
+    """Get all wallets for a user"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM wallets WHERE user_id = ? ORDER BY last_used DESC",
+            (user_id,)
+        ) as cursor:
+            return await cursor.fetchall()
+
+
+async def get_all_wallets():
+    """Get all wallets (admin)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT w.*, u.username, u.user_id
+            FROM wallets w
+            JOIN users u ON w.user_id = u.user_id
+            ORDER BY w.connected_at DESC
+        """) as cursor:
+            return await cursor.fetchall()
 
 
 async def get_user_stats(user_id: int):
