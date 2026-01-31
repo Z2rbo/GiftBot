@@ -1872,3 +1872,294 @@ body::before {
     font-size: 24px;
     margin-right: 8px;
 }
+
+/* ==================== RANK SYSTEM ==================== */
+.rank-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--glass);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#rank-icon {
+    font-size: 16px;
+}
+
+.rank-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--glass);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.rank-progress {
+    height: 100%;
+    background: var(--accent-gradient);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.rank-progress-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 4px;
+}
+
+/* ==================== SETTINGS ==================== */
+.settings-section {
+    margin-bottom: 24px;
+}
+
+.settings-section h4 {
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--glass);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+}
+
+.setting-item span {
+    font-size: 14px;
+}
+
+.toggle {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+
+.toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-card);
+    border-radius: 26px;
+    transition: 0.3s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+input:checked + .slider {
+    background: var(--accent-gradient);
+}
+
+input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.info-item a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+/* ==================== DUELS ==================== */
+.duel-create {
+    background: var(--glass);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.duel-create h4 {
+    margin-bottom: 8px;
+}
+
+.duel-create p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.duel-amounts {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.duel-amount-btn {
+    padding: 10px 20px;
+    background: var(--accent-gradient);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.duel-amount-btn:hover {
+    transform: scale(1.05);
+}
+
+.active-duels h4 {
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+}
+
+.duel-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--glass);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+}
+
+.duel-item.pending {
+    border: 1px solid var(--warning);
+}
+
+.join-duel-btn, .cancel-duel-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.join-duel-btn {
+    background: var(--success);
+    color: white;
+}
+
+.cancel-duel-btn {
+    background: var(--error);
+    color: white;
+}
+
+/* ==================== LOCKED GAMES ==================== */
+.game-card.locked-game {
+    opacity: 0.6;
+    position: relative;
+}
+
+.game-card.locked-game::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    border-radius: inherit;
+}
+
+.game-card.vip-game {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+/* ==================== VIP STYLES ==================== */
+.slot-reel.vip {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.play-btn.vip-btn {
+    background: var(--gold-gradient);
+}
+
+/* ==================== AMOUNT BUTTONS ==================== */
+.amount-btn small {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.animate-in {
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== LEADERBOARD IMPROVEMENTS ==================== */
+.lb-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin-left: 8px;
+}
+
+.lb-player-rank {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ==================== RESPONSIVE FIXES ==================== */
+@media (max-width: 400px) {
+    .duel-amounts {
+        flex-direction: column;
+    }
+    
+    .duel-amount-btn {
+        width: 100%;
+    }
+}
+
+ 
+ 

@@ -8,19 +8,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>GiftBot Casino</title>
     
-    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- TON Connect UI -->
     <script src="https://unpkg.com/@tonconnect/ui@2.0.6/dist/tonconnect-ui.min.js"></script>
     
-    <!-- Ethers.js -->
-    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
-    
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,8 +24,12 @@
                     <span class="logo-icon">🎰</span>
                     <span class="logo-text">GiftBot</span>
                 </div>
+                <div class="rank-display">
+                    <span id="rank-icon">🌱</span>
+                    <span id="user-rank">Новичок</span>
+                </div>
                 <div class="header-actions">
-                    <button class="icon-btn" onclick="showSettings()">⚙️</button>
+                    <button class="icon-btn" onclick="openSettings()">⚙️</button>
                 </div>
             </div>
             <div class="balance-card">
@@ -46,11 +42,15 @@
                     <span>+</span> Пополнить
                 </button>
             </div>
+            <div class="rank-progress-bar">
+                <div class="rank-progress" id="rank-progress" style="width: 0%"></div>
+            </div>
+            <div class="rank-progress-text" id="rank-progress-text">До Игрок: 100 ⭐</div>
         </header>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Daily Bonus Banner -->
+            <!-- Daily Bonus -->
             <section class="daily-bonus" id="daily-bonus" onclick="claimDailyBonus()">
                 <div class="bonus-left">
                     <span class="bonus-icon">🎁</span>
@@ -65,7 +65,7 @@
                 </div>
             </section>
 
-            <!-- Live Jackpot -->
+            <!-- Jackpot -->
             <section class="jackpot-banner">
                 <div class="jackpot-glow"></div>
                 <span class="jackpot-label">🏆 ДЖЕКПОТ</span>
@@ -77,6 +77,7 @@
             <section class="section" id="section-games">
                 <div class="section-header">
                     <h2>🎮 Игры</h2>
+                    <span id="max-bet">Макс. ставка: 50 ⭐</span>
                 </div>
                 <div class="games-carousel">
                     <div class="game-card featured" onclick="openGame('slots')">
@@ -94,19 +95,35 @@
                             <p>x1.95</p>
                         </div>
                     </div>
-                    <div class="game-card" onclick="openGame('crash')">
-                        <div class="game-badge new">NEW</div>
-                        <div class="game-visual">🚀</div>
-                        <div class="game-info">
-                            <h3>Краш</h3>
-                            <p>до x100</p>
-                        </div>
-                    </div>
                     <div class="game-card" onclick="openGame('dice')">
                         <div class="game-visual">🎲</div>
                         <div class="game-info">
                             <h3>Кости</h3>
-                            <p>x2 - x6</p>
+                            <p>x5</p>
+                        </div>
+                    </div>
+                    <div class="game-card locked-game" onclick="openGame('crash')">
+                        <div class="game-badge">🔒</div>
+                        <div class="game-visual">🚀</div>
+                        <div class="game-info">
+                            <h3>Краш</h3>
+                            <p>Ранг: Опытный</p>
+                        </div>
+                    </div>
+                    <div class="game-card locked-game" onclick="openGame('roulette')">
+                        <div class="game-badge">🔒</div>
+                        <div class="game-visual">🎡</div>
+                        <div class="game-info">
+                            <h3>Рулетка</h3>
+                            <p>Ранг: Мастер</p>
+                        </div>
+                    </div>
+                    <div class="game-card locked-game vip-game" onclick="openGame('highroller')">
+                        <div class="game-badge">👑</div>
+                        <div class="game-visual">💰</div>
+                        <div class="game-info">
+                            <h3>High Roller</h3>
+                            <p>Ранг: Легенда</p>
                         </div>
                     </div>
                 </div>
@@ -116,7 +133,6 @@
             <section class="section" id="section-cases">
                 <div class="section-header">
                     <h2>📦 Кейсы</h2>
-                    <a href="#" onclick="showAllCases()">Все →</a>
                 </div>
                 <div class="cases-grid">
                     <div class="case-card tier-common" onclick="openCase('starter')">
@@ -150,23 +166,27 @@
             <!-- Quick Actions -->
             <section class="section" id="section-quick">
                 <div class="quick-actions">
-                    <button class="quick-btn" onclick="switchTab('inventory')">
+                    <button class="quick-btn" onclick="openInventory()">
                         <span class="quick-icon">🎒</span>
                         <span class="quick-label">Инвентарь</span>
                         <span class="quick-badge" id="inv-count">0</span>
                     </button>
-                    <button class="quick-btn" onclick="switchTab('history')">
+                    <button class="quick-btn" onclick="openHistory()">
                         <span class="quick-icon">📜</span>
                         <span class="quick-label">История</span>
                     </button>
-                    <button class="quick-btn" onclick="switchTab('leaderboard')">
+                    <button class="quick-btn" onclick="openLeaderboard()">
                         <span class="quick-icon">🏆</span>
                         <span class="quick-label">Топ</span>
+                    </button>
+                    <button class="quick-btn" onclick="openDuels()">
+                        <span class="quick-icon">⚔️</span>
+                        <span class="quick-label">Дуэли</span>
                     </button>
                 </div>
             </section>
 
-            <!-- Achievements Section -->
+            <!-- Achievements -->
             <section class="section" id="section-achievements">
                 <div class="section-header">
                     <h2>🏅 Достижения</h2>
@@ -193,20 +213,10 @@
                         <span class="ach-name">10 кейсов</span>
                         <span class="ach-reward">+75 ⭐</span>
                     </div>
-                    <div class="achievement-card locked" data-id="jackpot">
-                        <span class="ach-icon">👑</span>
-                        <span class="ach-name">Джекпот</span>
-                        <span class="ach-reward">+500 ⭐</span>
-                    </div>
-                    <div class="achievement-card locked" data-id="referral">
-                        <span class="ach-icon">👥</span>
-                        <span class="ach-name">5 рефералов</span>
-                        <span class="ach-reward">+200 ⭐</span>
-                    </div>
                 </div>
             </section>
 
-            <!-- Support Banner -->
+            <!-- Support -->
             <section class="support-banner">
                 <span class="support-text">Нужна помощь?</span>
                 <a href="https://t.me/valuueee" class="support-link">💬 @valuueee</a>
@@ -215,25 +225,25 @@
 
         <!-- Bottom Navigation -->
         <nav class="bottom-nav">
-            <button class="nav-item active" data-tab="home" onclick="switchTab('home')">
+            <button class="nav-item active" data-tab="home">
                 <span class="nav-icon">🏠</span>
                 <span class="nav-label">Главная</span>
             </button>
-            <button class="nav-item" data-tab="games" onclick="switchTab('games')">
-                <span class="nav-icon">🎮</span>
-                <span class="nav-label">Игры</span>
+            <button class="nav-item" data-tab="duels">
+                <span class="nav-icon">⚔️</span>
+                <span class="nav-label">Дуэли</span>
             </button>
-            <button class="nav-item" data-tab="wallet" onclick="switchTab('wallet')">
+            <button class="nav-item" data-tab="wallet">
                 <span class="nav-icon">💳</span>
                 <span class="nav-label">Кошелёк</span>
             </button>
-            <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+            <button class="nav-item" data-tab="profile">
                 <span class="nav-icon">👤</span>
                 <span class="nav-label">Профиль</span>
             </button>
         </nav>
 
-        <!-- Modals/Overlays -->
+        <!-- Overlay -->
         <div class="overlay" id="overlay" onclick="closeOverlay()"></div>
         
         <!-- Game Modal -->
@@ -253,36 +263,32 @@
             </div>
             <div class="modal-body">
                 <div class="wallet-section">
-                    <h4>Подключить кошелёк</h4>
+                    <h4>Подключить TON кошелёк</h4>
                     <div class="wallet-options">
                         <button class="wallet-option" id="ton-wallet-btn" onclick="connectTON()">
                             <span class="wallet-icon-ton">💎</span>
                             <span>TON Wallet</span>
                             <span class="wallet-status" id="ton-status">Не подключен</span>
                         </button>
-                        <button class="wallet-option" onclick="connectMetamask()">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="Metamask" width="32">
-                            <span>Metamask</span>
-                            <span class="wallet-status" id="eth-status">Не подключен</span>
-                        </button>
                     </div>
                 </div>
                 <div class="wallet-section">
-                    <h4>Пополнить баланс</h4>
+                    <h4>Пополнить баланс (1 TON = 100 ⭐)</h4>
+                    <div id="deposit-info"></div>
                     <div class="amount-grid">
-                        <button class="amount-btn" onclick="selectDeposit(50)">50 ⭐</button>
-                        <button class="amount-btn" onclick="selectDeposit(100)">100 ⭐</button>
-                        <button class="amount-btn popular" onclick="selectDeposit(500)">500 ⭐</button>
-                        <button class="amount-btn" onclick="selectDeposit(1000)">1000 ⭐</button>
+                        <button class="amount-btn" onclick="selectDeposit(100)">100 ⭐<br><small>1 TON</small></button>
+                        <button class="amount-btn" onclick="selectDeposit(250)">250 ⭐<br><small>2.5 TON</small></button>
+                        <button class="amount-btn popular" onclick="selectDeposit(500)">500 ⭐<br><small>5 TON</small></button>
+                        <button class="amount-btn" onclick="selectDeposit(1000)">1000 ⭐<br><small>10 TON</small></button>
                     </div>
                     <button class="primary-btn" id="deposit-btn" onclick="processDeposit()" disabled>
-                        Пополнить
+                        Выберите сумму
                     </button>
                 </div>
                 <div class="wallet-section">
                     <h4>💸 Вывод средств</h4>
                     <button class="primary-btn withdraw-btn-wallet" onclick="closeWallet(); openWithdraw();">
-                        Вывести средства
+                        Вывести в TON
                     </button>
                 </div>
             </div>
@@ -339,14 +345,14 @@
                     </div>
                     <div class="inv-stat">
                         <span class="inv-stat-value" id="inv-total-value">0 ⭐</span>
-                        <span class="inv-stat-label">Общая стоимость</span>
+                        <span class="inv-stat-label">Стоимость</span>
                     </div>
                 </div>
                 <div class="inventory-grid" id="inventory-grid">
-                    <div class="empty-state">Инвентарь пуст. Открывайте кейсы!</div>
+                    <div class="empty-state">Инвентарь пуст</div>
                 </div>
                 <button class="primary-btn" id="withdraw-all-btn" onclick="withdrawAll()" style="margin-top: 16px; display: none;">
-                    💸 Вывести всё на баланс
+                    💸 Продать всё
                 </button>
             </div>
         </div>
@@ -354,7 +360,7 @@
         <!-- History Modal -->
         <div class="modal" id="history-modal">
             <div class="modal-header">
-                <h3>📜 История игр</h3>
+                <h3>📜 История</h3>
                 <button class="close-btn" onclick="closeHistory()">✕</button>
             </div>
             <div class="modal-body">
@@ -377,13 +383,11 @@
             </div>
             <div class="modal-body">
                 <div class="leaderboard-tabs">
-                    <button class="lb-tab active" onclick="switchLeaderboard('profit')">💰 По профиту</button>
-                    <button class="lb-tab" onclick="switchLeaderboard('wins')">🏆 По победам</button>
-                    <button class="lb-tab" onclick="switchLeaderboard('games')">🎮 По играм</button>
+                    <button class="lb-tab active" onclick="switchLeaderboard('profit')">💰 Профит</button>
+                    <button class="lb-tab" onclick="switchLeaderboard('wins')">🏆 Победы</button>
+                    <button class="lb-tab" onclick="switchLeaderboard('games')">🎮 Игры</button>
                 </div>
-                <div class="leaderboard-list" id="leaderboard-list">
-                    <!-- Filled by JS -->
-                </div>
+                <div class="leaderboard-list" id="leaderboard-list"></div>
                 <div class="your-position" id="your-position">
                     <span>Твоя позиция:</span>
                     <span id="your-rank">#---</span>
@@ -394,30 +398,84 @@
         <!-- Withdraw Modal -->
         <div class="modal" id="withdraw-modal">
             <div class="modal-header">
-                <h3>💸 Вывод средств</h3>
+                <h3>💸 Вывод в TON</h3>
                 <button class="close-btn" onclick="closeWithdraw()">✕</button>
             </div>
             <div class="modal-body">
                 <div class="withdraw-balance">
-                    <span>Доступно для вывода:</span>
+                    <span>Доступно:</span>
                     <span class="withdraw-amount" id="withdraw-available">0 ⭐</span>
                 </div>
+                <p style="color: var(--text-secondary); font-size: 14px; text-align: center;">100 ⭐ = 1 TON</p>
                 <div class="withdraw-options">
                     <button class="withdraw-option" onclick="selectWithdrawMethod('ton')">
-                        <img src="https://ton.org/download/ton_symbol.svg" alt="TON" width="32">
+                        <span style="font-size: 32px;">💎</span>
                         <span>TON Wallet</span>
-                        <span class="withdraw-rate">1 TON = 1000 ⭐</span>
-                    </button>
-                    <button class="withdraw-option" onclick="selectWithdrawMethod('stars')">
-                        <span style="font-size: 32px;">⭐</span>
-                        <span>Telegram Stars</span>
                         <span class="withdraw-rate">Минимум 100 ⭐</span>
                     </button>
                 </div>
                 <div class="withdraw-input-section" id="withdraw-input-section" style="display: none;">
                     <label>Сумма вывода (⭐)</label>
-                    <input type="number" id="withdraw-amount-input" min="100" placeholder="Введите сумму">
-                    <button class="primary-btn" onclick="processWithdraw()">Вывести</button>
+                    <input type="number" id="withdraw-amount-input" min="100" placeholder="Минимум 100 ⭐">
+                    <button class="primary-btn" onclick="processWithdraw()">Создать заявку</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settings-modal">
+            <div class="modal-header">
+                <h3>⚙️ Настройки</h3>
+                <button class="close-btn" onclick="closeSettings()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>Игровой профиль</h4>
+                    <div class="setting-item">
+                        <span>🔊 Звуки и вибрация</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="setting-sound" onchange="toggleSetting('sound')" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <span>🔔 Уведомления</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="setting-notifications" onchange="toggleSetting('notifications')" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <span>💰 Авто-сбор бонусов</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="setting-autocollect" onchange="toggleSetting('autoCollect')">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Информация</h4>
+                    <div class="info-item">
+                        <span>Версия:</span>
+                        <span>2.0.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span>Поддержка:</span>
+                        <a href="https://t.me/valuueee">@valuueee</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Duels Modal -->
+        <div class="modal" id="duels-modal">
+            <div class="modal-header">
+                <h3>⚔️ Дуэли с друзьями</h3>
+                <button class="close-btn" onclick="closeDuels()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="duels-list">
+                    <div class="empty-state">Загрузка...</div>
                 </div>
             </div>
         </div>

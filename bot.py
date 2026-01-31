@@ -209,6 +209,25 @@ async def show_support(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "settings")
+async def show_settings(callback: CallbackQuery):
+    text = """
+⚙️ <b>Настройки</b>
+
+Настройки игрового профиля доступны 
+в веб-приложении.
+
+Нажми "🎮 Играть" → ⚙️ в правом верхнем углу
+
+<b>Доступные настройки:</b>
+• 🔊 Звуки и вибрация
+• 🔔 Уведомления
+• 💰 Авто-сбор бонусов
+"""
+    await callback.message.edit_text(text, reply_markup=back_kb(), parse_mode=ParseMode.HTML)
+    await callback.answer()
+
+
 # ==================== WEBAPP DATA ====================
 
 @router.message(F.web_app_data)
@@ -255,6 +274,64 @@ async def handle_webapp_data(message: Message):
             if wallet_type and wallet_address:
                 await save_wallet(user_id, wallet_type, wallet_address)
                 logger.info(f"Wallet saved: {user_id} - {wallet_type}: {wallet_address}")
+        
+        elif action == 'deposit':
+            # Notify about deposit
+            amount_ton = data.get('amount_ton', 0)
+            amount_stars = data.get('amount_stars', 0)
+            wallet = data.get('wallet', 'unknown')
+            
+            # Update balance in database
+            await update_balance(user_id, amount_stars, f"TON deposit: {amount_ton} TON")
+            
+            # Notify admin
+            admin_text = f"""
+💰 <b>Новое пополнение!</b>
+
+👤 User: @{message.from_user.username or 'unknown'} (ID: {user_id})
+💎 Сумма: <b>{amount_ton} TON</b> = <b>{amount_stars} ⭐</b>
+📍 Кошелёк: <code>{wallet[:20]}...</code>
+"""
+            try:
+                await message.bot.send_message(ADMIN_ID, admin_text, parse_mode=ParseMode.HTML)
+            except:
+                pass
+            
+            await message.answer(
+                f"✅ Баланс пополнен на <b>{amount_stars} ⭐</b>!",
+                parse_mode=ParseMode.HTML
+            )
+            logger.info(f"Deposit: {user_id} - {amount_ton} TON = {amount_stars} stars")
+        
+        elif action == 'withdraw_request':
+            # Handle withdrawal request
+            amount_stars = data.get('amount_stars', 0)
+            method = data.get('method', 'ton')
+            wallet = data.get('wallet', 'unknown')
+            
+            amount_ton = amount_stars / 100  # 100 stars = 1 TON
+            
+            # Notify admin about withdrawal
+            admin_text = f"""
+💸 <b>Заявка на вывод!</b>
+
+👤 User: @{message.from_user.username or 'unknown'} (ID: {user_id})
+⭐ Сумма: <b>{amount_stars} ⭐</b> = <b>{amount_ton} TON</b>
+📍 Кошелёк: <code>{wallet}</code>
+📋 Метод: {method.upper()}
+
+Отправьте {amount_ton} TON на кошелёк выше.
+"""
+            try:
+                await message.bot.send_message(ADMIN_ID, admin_text, parse_mode=ParseMode.HTML)
+            except:
+                pass
+            
+            await message.answer(
+                f"📤 Заявка на вывод <b>{amount_ton} TON</b> создана!\n\nОжидайте обработки в течение 24 часов.",
+                parse_mode=ParseMode.HTML
+            )
+            logger.info(f"Withdraw request: {user_id} - {amount_stars} stars = {amount_ton} TON")
             
     except Exception as e:
         logger.error(f"WebApp data error: {e}")
