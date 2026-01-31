@@ -2,7 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>GiftBot Casino</title>
     
     <!-- Telegram WebApp SDK -->
@@ -253,7 +256,7 @@
                     <h4>Подключить кошелёк</h4>
                     <div class="wallet-options">
                         <button class="wallet-option" id="ton-wallet-btn" onclick="connectTON()">
-                            <img src="https://ton.org/download/ton_symbol.svg" alt="TON" width="32">
+                            <span class="wallet-icon-ton">💎</span>
                             <span>TON Wallet</span>
                             <span class="wallet-status" id="ton-status">Не подключен</span>
                         </button>

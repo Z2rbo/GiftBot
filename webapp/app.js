@@ -31,10 +31,82 @@ const state = {
 // ==================== INIT ====================
 
 document.addEventListener('DOMContentLoaded', () => {
-    initTelegram();
-    initTonConnect();
-    loadUserData();
-    updateUI();
+    console.log('DOM loaded, initializing...');
+    try {
+        initTelegram();
+        initTonConnect();
+        loadUserData();
+        updateUI();
+        
+        // Initialize daily bonus and achievements after a short delay
+        setTimeout(() => {
+            initDailyBonus();
+            initAchievements();
+            initJackpot();
+        }, 500);
+        
+        // Make functions globally available
+        window.switchTab = switchTab;
+        window.connectTON = connectTON;
+        window.connectMetamask = connectMetamask;
+        window.openGame = openGame;
+        window.openCase = openCase;
+        window.openInventory = openInventory;
+        window.openHistory = openHistory;
+        window.openLeaderboard = openLeaderboard;
+        window.openWallet = openWallet;
+        window.openProfile = openProfile;
+        window.closeWallet = closeWallet;
+        window.closeProfile = closeProfile;
+        window.closeGame = closeGame;
+        window.closeInventory = closeInventory;
+        window.closeHistory = closeHistory;
+        window.closeLeaderboard = closeLeaderboard;
+        window.closeOverlay = closeOverlay;
+        window.selectBet = selectBet;
+        window.selectDeposit = selectDeposit;
+        window.processDeposit = processDeposit;
+        window.playSlots = playSlots;
+        window.playCoinflip = playCoinflip;
+        window.playCrash = playCrash;
+        window.playDice = playDice;
+        window.sellItem = sellItem;
+        window.withdrawAll = withdrawAll;
+        window.claimDailyBonus = claimDailyBonus;
+        window.openWithdraw = openWithdraw;
+        window.closeWithdraw = closeWithdraw;
+        window.selectWithdrawMethod = selectWithdrawMethod;
+        window.processWithdraw = processWithdraw;
+        window.filterHistory = filterHistory;
+        window.switchLeaderboard = switchLeaderboard;
+        window.openCase = openCase;
+        window.closeOverlay = closeOverlay;
+        
+        // Add click handlers for buttons that might not have onclick
+        document.querySelectorAll('.quick-btn').forEach(btn => {
+            if (!btn.onclick) {
+                const tab = btn.getAttribute('onclick')?.match(/switchTab\('(\w+)'\)/)?.[1];
+                if (tab) {
+                    btn.addEventListener('click', () => switchTab(tab));
+                }
+            }
+        });
+        
+        // Ensure all nav items have click handlers
+        document.querySelectorAll('.nav-item').forEach(item => {
+            if (!item.onclick) {
+                const tab = item.dataset.tab;
+                if (tab) {
+                    item.addEventListener('click', () => switchTab(tab));
+                }
+            }
+        });
+        
+        console.log('Initialization complete');
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showToast('Ошибка инициализации', 'error');
+    }
 });
 
 function initTelegram() {
@@ -62,8 +134,27 @@ let tonConnectUI = null;
 
 function initTonConnect() {
     try {
+        // Check if TON_CONNECT_UI is available
+        if (typeof TON_CONNECT_UI === 'undefined') {
+            console.error('TON_CONNECT_UI not loaded');
+            // Try to load it dynamically
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@tonconnect/ui@2.0.6/dist/tonconnect-ui.min.js';
+            script.onload = () => {
+                console.log('TON Connect UI loaded dynamically');
+                initTonConnect();
+            };
+            script.onerror = () => {
+                console.error('Failed to load TON Connect UI');
+                showToast('TON Connect не загружен', 'error');
+            };
+            document.head.appendChild(script);
+            return;
+        }
+        
         // Use the deployed manifest URL
-        const manifestUrl = 'https://webapp-nine-navy.vercel.app/tonconnect-manifest.json';
+        const manifestUrl = window.location.origin + '/tonconnect-manifest.json';
+        console.log('Initializing TON Connect with manifest:', manifestUrl);
         
         tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: manifestUrl,
@@ -139,24 +230,42 @@ function initTonConnect() {
 }
 
 async function connectTON() {
+    console.log('connectTON called, tonConnectUI:', tonConnectUI);
+    
     if (!tonConnectUI) {
+        console.error('TON Connect UI not initialized');
         showToast('TON Connect не загружен. Обновите страницу.', 'error');
-        return;
+        // Попробуем инициализировать заново
+        try {
+            initTonConnect();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+            console.error('Failed to reinitialize TON Connect:', e);
+            return;
+        }
     }
     
     if (state.tonWallet) {
         try {
             await tonConnectUI.disconnect();
+            state.tonWallet = null;
+            const tonStatus = document.getElementById('ton-status');
+            const tonBtn = document.getElementById('ton-wallet-btn');
+            if (tonStatus) tonStatus.textContent = 'Не подключен';
+            if (tonBtn) tonBtn.classList.remove('connected');
             showToast('TON кошелёк отключен', 'success');
+            localStorage.removeItem('ton_wallet_address');
         } catch (e) {
             console.error('Disconnect error:', e);
+            showToast('Ошибка отключения', 'error');
         }
     } else {
         try {
+            console.log('Opening TON Connect modal...');
             await tonConnectUI.openModal();
         } catch (e) {
             console.error('TON connect error:', e);
-            if (e.message?.includes('User rejected')) {
+            if (e.message?.includes('User rejected') || e.message?.includes('rejected')) {
                 showToast('Подключение отменено', 'error');
             } else {
                 showToast('Ошибка подключения. Попробуйте ещё раз.', 'error');
@@ -309,49 +418,101 @@ function getGameName(game) {
 // ==================== NAVIGATION ====================
 
 function switchTab(tab) {
-    // Update nav
-    document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === tab);
-    });
+    console.log('Switching to tab:', tab);
     
-    // Handle modals
-    if (tab === 'wallet') {
-        openWallet();
-    } else if (tab === 'profile') {
-        openProfile();
-    } else if (tab === 'inventory') {
-        openInventory();
-    } else if (tab === 'history') {
-        openHistory();
-    } else if (tab === 'leaderboard') {
-        openLeaderboard();
-    } else if (tab === 'home' || tab === 'games') {
-        closeAllModals();
+    try {
+        // Update nav
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(el => {
+            if (el.dataset.tab === tab) {
+                el.classList.add('active');
+            } else {
+                el.classList.remove('active');
+            }
+        });
+        
+        // Handle modals and sections
+        if (tab === 'wallet') {
+            openWallet();
+        } else if (tab === 'profile') {
+            openProfile();
+        } else if (tab === 'inventory') {
+            openInventory();
+        } else if (tab === 'history') {
+            openHistory();
+        } else if (tab === 'leaderboard') {
+            openLeaderboard();
+        } else if (tab === 'home' || tab === 'games') {
+            closeAllModals();
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        haptic('light');
+    } catch (error) {
+        console.error('Error in switchTab:', error);
+        showToast('Ошибка переключения вкладки', 'error');
     }
-    
-    haptic('light');
 }
 
 function openWallet() {
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('wallet-modal').classList.add('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('wallet-modal');
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            haptic('medium');
+        } else {
+            console.error('Wallet modal elements not found');
+            showToast('Ошибка открытия кошелька', 'error');
+        }
+    } catch (error) {
+        console.error('Error opening wallet:', error);
+        showToast('Ошибка открытия кошелька', 'error');
+    }
 }
 
 function closeWallet() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('wallet-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('wallet-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing wallet:', error);
+    }
 }
 
 function openProfile() {
-    updateUI();
-    updateHistoryUI();
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('profile-modal').classList.add('active');
+    try {
+        updateUI();
+        updateHistoryUI();
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('profile-modal');
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            haptic('medium');
+        } else {
+            console.error('Profile modal elements not found');
+            showToast('Ошибка открытия профиля', 'error');
+        }
+    } catch (error) {
+        console.error('Error opening profile:', error);
+        showToast('Ошибка открытия профиля', 'error');
+    }
 }
 
 function closeProfile() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('profile-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('profile-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing profile:', error);
+    }
 }
 
 function closeOverlay() {
@@ -359,21 +520,47 @@ function closeOverlay() {
 }
 
 function closeAllModals() {
-    document.getElementById('overlay').classList.remove('active');
-    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    try {
+        const overlay = document.getElementById('overlay');
+        if (overlay) overlay.classList.remove('active');
+        document.querySelectorAll('.modal').forEach(m => {
+            if (m) m.classList.remove('active');
+        });
+    } catch (error) {
+        console.error('Error closing modals:', error);
+    }
 }
 
 // ==================== INVENTORY ====================
 
 function openInventory() {
-    updateInventoryUI();
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('inventory-modal').classList.add('active');
+    try {
+        updateInventoryUI();
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('inventory-modal');
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            haptic('medium');
+        } else {
+            console.error('Inventory modal elements not found');
+            showToast('Ошибка открытия инвентаря', 'error');
+        }
+    } catch (error) {
+        console.error('Error opening inventory:', error);
+        showToast('Ошибка открытия инвентаря', 'error');
+    }
 }
 
 function closeInventory() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('inventory-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('inventory-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing inventory:', error);
+    }
 }
 
 function updateInventoryUI() {
@@ -440,14 +627,33 @@ function withdrawAll() {
 let historyFilter = 'all';
 
 function openHistory() {
-    updateFullHistoryUI();
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('history-modal').classList.add('active');
+    try {
+        updateFullHistoryUI();
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('history-modal');
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            haptic('medium');
+        } else {
+            console.error('History modal elements not found');
+            showToast('Ошибка открытия истории', 'error');
+        }
+    } catch (error) {
+        console.error('Error opening history:', error);
+        showToast('Ошибка открытия истории', 'error');
+    }
 }
 
 function closeHistory() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('history-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('history-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing history:', error);
+    }
 }
 
 function filterHistory(filter) {
@@ -543,14 +749,33 @@ const demoLeaderboard = {
 };
 
 function openLeaderboard() {
-    updateLeaderboardUI();
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('leaderboard-modal').classList.add('active');
+    try {
+        updateLeaderboardUI();
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('leaderboard-modal');
+        if (overlay && modal) {
+            overlay.classList.add('active');
+            modal.classList.add('active');
+            haptic('medium');
+        } else {
+            console.error('Leaderboard modal elements not found');
+            showToast('Ошибка открытия лидерборда', 'error');
+        }
+    } catch (error) {
+        console.error('Error opening leaderboard:', error);
+        showToast('Ошибка открытия лидерборда', 'error');
+    }
 }
 
 function closeLeaderboard() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('leaderboard-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('leaderboard-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing leaderboard:', error);
+    }
 }
 
 function switchLeaderboard(type) {
@@ -680,36 +905,64 @@ async function processWithdraw() {
 // ==================== GAMES ====================
 
 function openGame(game) {
-    state.currentGame = game;
-    document.getElementById('game-title').textContent = getGameEmoji(game) + ' ' + getGameName(game);
-    
-    let html = '';
-    
-    switch(game) {
-        case 'slots':
-            html = getSlotsHTML();
-            break;
-        case 'coinflip':
-            html = getCoinflipHTML();
-            break;
-        case 'crash':
-            html = getCrashHTML();
-            break;
-        case 'dice':
-            html = getDiceHTML();
-            break;
+    try {
+        console.log('Opening game:', game);
+        state.currentGame = game;
+        
+        const gameTitle = document.getElementById('game-title');
+        const gameBody = document.getElementById('game-body');
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('game-modal');
+        
+        if (!gameTitle || !gameBody || !overlay || !modal) {
+            console.error('Game modal elements not found');
+            showToast('Ошибка открытия игры', 'error');
+            return;
+        }
+        
+        gameTitle.textContent = getGameEmoji(game) + ' ' + getGameName(game);
+        
+        let html = '';
+        
+        switch(game) {
+            case 'slots':
+                html = getSlotsHTML();
+                break;
+            case 'coinflip':
+                html = getCoinflipHTML();
+                break;
+            case 'crash':
+                html = getCrashHTML();
+                break;
+            case 'dice':
+                html = getDiceHTML();
+                break;
+            default:
+                console.error('Unknown game:', game);
+                showToast('Неизвестная игра', 'error');
+                return;
+        }
+        
+        gameBody.innerHTML = html;
+        overlay.classList.add('active');
+        modal.classList.add('active');
+        
+        haptic('medium');
+    } catch (error) {
+        console.error('Error opening game:', error);
+        showToast('Ошибка открытия игры', 'error');
     }
-    
-    document.getElementById('game-body').innerHTML = html;
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('game-modal').classList.add('active');
-    
-    haptic('medium');
 }
 
 function closeGame() {
-    document.getElementById('overlay').classList.remove('active');
-    document.getElementById('game-modal').classList.remove('active');
+    try {
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('game-modal');
+        if (overlay) overlay.classList.remove('active');
+        if (modal) modal.classList.remove('active');
+    } catch (error) {
+        console.error('Error closing game:', error);
+    }
 }
 
 function selectBet(amount) {
@@ -1042,56 +1295,77 @@ const cases = {
 };
 
 function openCase(type) {
-    const caseData = cases[type];
-    if (!caseData) return;
-    
-    if (state.balance < caseData.price) {
-        showToast('Недостаточно средств!', 'error');
-        return;
-    }
-    
-    state.balance -= caseData.price;
-    state.casesOpened = (state.casesOpened || 0) + 1;
-    updateUI();
-    
-    // Random reward
-    const roll = Math.random();
-    let cumulative = 0;
-    let reward = caseData.rewards[0];
-    
-    for (const r of caseData.rewards) {
-        cumulative += r.chance;
-        if (roll <= cumulative) {
-            reward = r;
-            break;
+    try {
+        const caseData = cases[type];
+        if (!caseData) {
+            console.error('Unknown case type:', type);
+            showToast('Неизвестный тип кейса', 'error');
+            return;
         }
+        
+        if (state.balance < caseData.price) {
+            showToast('Недостаточно средств!', 'error');
+            haptic('error');
+            return;
+        }
+        
+        state.balance -= caseData.price;
+        state.casesOpened = (state.casesOpened || 0) + 1;
+        updateUI();
+        
+        // Random reward
+        const roll = Math.random();
+        let cumulative = 0;
+        let reward = caseData.rewards[0];
+        
+        for (const r of caseData.rewards) {
+            cumulative += r.chance;
+            if (roll <= cumulative) {
+                reward = r;
+                break;
+            }
+        }
+        
+        // Add to inventory
+        state.inventory.push({ ...reward, id: Date.now() });
+        updateUI();
+        saveUserData();
+        
+        // Check achievements
+        checkAchievements();
+        
+        // Show result
+        const gameTitle = document.getElementById('game-title');
+        const gameBody = document.getElementById('game-body');
+        const overlay = document.getElementById('overlay');
+        const modal = document.getElementById('game-modal');
+        
+        if (!gameTitle || !gameBody || !overlay || !modal) {
+            console.error('Game modal elements not found');
+            showToast('Ошибка открытия кейса', 'error');
+            return;
+        }
+        
+        gameTitle.textContent = '📦 Открытие кейса';
+        gameBody.innerHTML = `
+            <div class="result-display animate-in">
+                <div class="result-icon">${reward.icon}</div>
+                <div class="result-text">${reward.name}</div>
+                <div class="result-amount win">${reward.value} ⭐</div>
+                <p style="color: var(--text-secondary); margin: 16px 0;">Добавлено в инвентарь</p>
+                <button class="play-btn" onclick="closeGame()">Отлично!</button>
+            </div>
+        `;
+        
+        overlay.classList.add('active');
+        modal.classList.add('active');
+        
+        haptic('success');
+        showToast(`Получен: ${reward.name}!`, 'success');
+    } catch (error) {
+        console.error('Error opening case:', error);
+        showToast('Ошибка открытия кейса', 'error');
     }
-    
-    // Add to inventory
-    state.inventory.push({ ...reward, id: Date.now() });
-    updateUI();
-    saveUserData();
-    
-    // Check achievements
-    checkAchievements();
-    
-    // Show result
-    document.getElementById('game-title').textContent = '📦 Открытие кейса';
-    document.getElementById('game-body').innerHTML = `
-        <div class="result-display animate-in">
-            <div class="result-icon">${reward.icon}</div>
-            <div class="result-text">${reward.name}</div>
-            <div class="result-amount win">${reward.value} ⭐</div>
-            <p style="color: var(--text-secondary); margin: 16px 0;">Добавлено в инвентарь</p>
-            <button class="play-btn" onclick="closeGame()">Отлично!</button>
-        </div>
-    `;
-    
-    document.getElementById('overlay').classList.add('active');
-    document.getElementById('game-modal').classList.add('active');
-    
-    haptic('success');
-    showToast(`Получен: ${reward.name}!`, 'success');
 }
 
 // ==================== DEPOSIT ====================

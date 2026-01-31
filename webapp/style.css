@@ -41,6 +41,9 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    /* Optimize for desktop */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Animated background particles */
@@ -69,6 +72,24 @@ body::before {
     flex-direction: column;
     position: relative;
     z-index: 1;
+    /* Desktop optimization */
+    margin: 0 auto;
+}
+
+/* Desktop container */
+@media (min-width: 768px) {
+    .app {
+        max-width: 480px;
+        box-shadow: 0 0 60px rgba(0,0,0,0.5);
+        border-left: 1px solid rgba(139, 92, 246, 0.1);
+        border-right: 1px solid rgba(139, 92, 246, 0.1);
+    }
+}
+
+@media (min-width: 1200px) {
+    .app {
+        max-width: 600px;
+    }
 }
 
 /* Header */
@@ -470,6 +491,24 @@ body::before {
     padding: 10px 16px;
     padding-bottom: calc(10px + var(--safe-bottom));
     z-index: 1000;
+    /* Desktop optimization */
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+    .bottom-nav {
+        max-width: 480px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 20px 20px 0 0;
+    }
+}
+
+@media (min-width: 1200px) {
+    .bottom-nav {
+        max-width: 600px;
+    }
 }
 
 .nav-item {
@@ -515,6 +554,14 @@ body::before {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s;
+    /* Desktop optimization */
+    cursor: pointer;
+}
+
+@media (min-width: 768px) {
+    .overlay {
+        backdrop-filter: blur(8px);
+    }
 }
 
 .overlay.active {
@@ -538,6 +585,29 @@ body::before {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    /* Desktop optimization */
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+    .modal {
+        max-width: 500px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100%);
+        border-radius: 24px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    
+    .modal.active {
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@media (min-width: 1200px) {
+    .modal {
+        max-width: 600px;
+    }
 }
 
 .modal.active {
@@ -609,6 +679,15 @@ body::before {
 
 .wallet-option.connected {
     border-color: var(--success);
+}
+
+.wallet-icon-ton {
+    font-size: 28px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .wallet-option span:nth-child(2) {
@@ -1660,6 +1739,71 @@ body::before {
 
 /* ==================== RESPONSIVE ==================== */
 
+/* Desktop optimizations */
+@media (min-width: 768px) {
+    .app {
+        max-width: 480px;
+        margin: 0 auto;
+        box-shadow: 0 0 50px rgba(0,0,0,0.3);
+    }
+    
+    .modal {
+        max-width: 500px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100%);
+        border-radius: var(--radius);
+    }
+    
+    .modal.active {
+        transform: translateX(-50%) translateY(0);
+    }
+    
+    .games-carousel {
+        justify-content: center;
+    }
+    
+    .game-card {
+        min-width: 160px;
+    }
+    
+    .game-card.featured {
+        min-width: 200px;
+    }
+    
+    .cases-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .quick-actions {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    
+    .achievements-scroll {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .achievement-card {
+        min-width: 120px;
+    }
+}
+
+/* Tablet */
+@media (min-width: 481px) and (max-width: 767px) {
+    .cases-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .modal {
+        max-width: 90%;
+        left: 5%;
+    }
+}
+
+/* Mobile small */
 @media (max-width: 360px) {
     .inventory-grid {
         grid-template-columns: 1fr;
@@ -1676,4 +1820,55 @@ body::before {
     .jackpot-value {
         font-size: 24px;
     }
+    
+    .balance-value {
+        font-size: 28px;
+    }
+    
+    .game-card {
+        min-width: 120px;
+        padding: 14px;
+    }
+    
+    .game-card.featured {
+        min-width: 160px;
+    }
+}
+
+/* Desktop large screens */
+@media (min-width: 1200px) {
+    .app {
+        max-width: 600px;
+    }
+    
+    .cases-grid {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 700px;
+    }
+}
+
+/* Fix for TON logo */
+.wallet-option img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.wallet-option img[src=""],
+.wallet-option img:not([src]) {
+    display: none;
+}
+
+/* Fallback for TON logo */
+.wallet-option:has(img[src*="ton"])::before {
+    content: "💎";
+    font-size: 24px;
+    margin-right: 8px;
+    display: none;
+}
+
+.wallet-option img[onerror] + span {
+    display: inline-block;
+    font-size: 24px;
+    margin-right: 8px;
 }
