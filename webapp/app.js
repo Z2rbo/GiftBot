@@ -18,12 +18,33 @@ const RANKS = [
     { name: 'VIP', icon: '💎', minBalance: 10000, maxBet: 5000, games: ['slots', 'coinflip', 'dice', 'crash', 'roulette', 'highroller', 'vip_slots'] }
 ];
 
+// ==================== ACHIEVEMENTS ====================
+const ACHIEVEMENTS = {
+    first_win: { name: 'Первая победа', icon: '🎯', reward: 10, condition: (s) => s.stats.wins >= 1 },
+    streak_3: { name: '3 дня подряд', icon: '🔥', reward: 50, condition: (s) => s.dailyStreak >= 3 },
+    big_win: { name: 'Выигрыш 500⭐', icon: '💰', reward: 100, condition: (s) => s.maxWin >= 500 },
+    collector: { name: '10 кейсов', icon: '📦', reward: 75, condition: (s) => s.casesOpened >= 10 },
+    high_roller: { name: 'Ставка 500⭐', icon: '🎲', reward: 50, condition: (s) => s.maxBet >= 500 },
+    lucky_7: { name: '7 побед подряд', icon: '🍀', reward: 150, condition: (s) => s.winStreak >= 7 },
+    millionaire: { name: 'Заработал 10000⭐', icon: '💎', reward: 200, condition: (s) => s.totalWon >= 10000 },
+    veteran: { name: '100 игр', icon: '🏅', reward: 100, condition: (s) => s.stats.games >= 100 },
+    deposit_king: { name: 'Депозит 1000⭐', icon: '👑', reward: 100, condition: (s) => s.totalDeposited >= 1000 },
+    case_master: { name: '50 кейсов', icon: '🎁', reward: 200, condition: (s) => s.casesOpened >= 50 },
+    consistent: { name: '7 дней подряд', icon: '📅', reward: 250, condition: (s) => s.dailyStreak >= 7 },
+    legend: { name: '1000 игр', icon: '⚡', reward: 500, condition: (s) => s.stats.games >= 1000 }
+};
+
 // ==================== APP STATE ====================
 const tg = window.Telegram?.WebApp;
 
 const state = {
     balance: 100,
     totalDeposited: 0,
+    totalWon: 0,
+    maxWin: 0,
+    maxBet: 0,
+    winStreak: 0,
+    currentWinStreak: 0,
     inventory: [],
     history: [],
     stats: { games: 0, wins: 0, profit: 0 },
@@ -49,6 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadUserData();
     updateUI();
     updateRankUI();
+    checkAchievements();
     
     setTimeout(initTonConnect, 1000);
     setTimeout(function() {
@@ -63,6 +85,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tab) switchTab(tab);
         });
     });
+    
+    // Sync balance with server on load
+    syncBalanceWithServer();
     
     console.log('✅ App initialized');
 });
@@ -82,6 +107,22 @@ function initTelegram() {
             document.documentElement.style.setProperty('--bg-secondary', tg.themeParams.secondary_bg_color || '#0d0d2b');
         }
     }
+}
+
+// ==================== SERVER SYNC ====================
+function syncBalanceWithServer() {
+    // Request current balance from server
+    sendToBot('sync_balance', { request: true });
+}
+
+function reportGameResult(game, bet, won, amount) {
+    sendToBot('game_result', {
+        game: game,
+        bet: bet,
+        won: won,
+        amount: amount,
+        balance: state.balance
+    });
 }
 
 // ==================== RANK SYSTEM ====================
@@ -130,8 +171,75 @@ function updateRankUI() {
         var progressPercent = Math.min(100, ((totalBalance - rank.minBalance) / (nextRank.minBalance - rank.minBalance)) * 100);
         
         if (progress) progress.style.width = progressPercent + '%';
-        if (progressText) progressText.textContent = 'До ' + nextRank.name + ': ' + (nextRank.minBalance - totalBalance) + ' ⭐';
+        if (progressText) progressText.textContent = 'До ' + nextRank.name + ': ' + Math.max(0, nextRank.minBalance - totalBalance) + ' ⭐';
+    } else {
+        var progressText = document.getElementById('rank-progress-text');
+        if (progressText) progressText.textContent = 'Максимальный ранг!';
+        var progress = document.getElementById('rank-progress');
+        if (progress) progress.style.width = '100%';
     }
+}
+
+// ==================== ACHIEVEMENTS ====================
+function checkAchievements() {
+    var unlocked = 0;
+    var total = Object.keys(ACHIEVEMENTS).length;
+    var newUnlock = false;
+    
+    for (var id in ACHIEVEMENTS) {
+        var ach = ACHIEVEMENTS[id];
+        var card = document.querySelector('.achievement-card[data-id="' + id + '"]');
+        
+        if (state.achievements[id]) {
+            unlocked++;
+            if (card) {
+                card.classList.remove('locked');
+                card.classList.add('unlocked');
+            }
+        } else if (ach.condition(state)) {
+            // Unlock achievement
+            state.achievements[id] = true;
+            state.balance += ach.reward;
+            unlocked++;
+            newUnlock = true;
+            
+            if (card) {
+                card.classList.remove('locked');
+                card.classList.add('unlocked');
+            }
+            
+            showToast('🏅 Достижение: ' + ach.name + ' +' + ach.reward + '⭐', 'success');
+            haptic('success');
+        }
+    }
+    
+    var achProgress = document.getElementById('ach-progress');
+    if (achProgress) achProgress.textContent = unlocked + '/' + total;
+    
+    if (newUnlock) {
+        saveUserData();
+        updateUI();
+    }
+}
+
+function updateAchievementsUI() {
+    for (var id in ACHIEVEMENTS) {
+        var card = document.querySelector('.achievement-card[data-id="' + id + '"]');
+        if (card) {
+            if (state.achievements[id]) {
+                card.classList.remove('locked');
+                card.classList.add('unlocked');
+            } else {
+                card.classList.add('locked');
+                card.classList.remove('unlocked');
+            }
+        }
+    }
+    
+    var unlocked = Object.keys(state.achievements).length;
+    var total = Object.keys(ACHIEVEMENTS).length;
+    var achProgress = document.getElementById('ach-progress');
+    if (achProgress) achProgress.textContent = unlocked + '/' + total;
 }
 
 // ==================== TON CONNECT ====================
@@ -248,12 +356,18 @@ function loadUserData() {
             var data = JSON.parse(saved);
             state.balance = data.balance || 100;
             state.totalDeposited = data.totalDeposited || 0;
+            state.totalWon = data.totalWon || 0;
+            state.maxWin = data.maxWin || 0;
+            state.maxBet = data.maxBet || 0;
+            state.winStreak = data.winStreak || 0;
+            state.currentWinStreak = data.currentWinStreak || 0;
             state.inventory = data.inventory || [];
             state.history = data.history || [];
             state.stats = data.stats || { games: 0, wins: 0, profit: 0 };
             state.lastDailyBonus = data.lastDailyBonus || null;
             state.dailyStreak = data.dailyStreak || 0;
             state.casesOpened = data.casesOpened || 0;
+            state.achievements = data.achievements || {};
             state.settings = data.settings || { sound: true, notifications: true, autoCollect: false };
         } catch (e) {
             console.error('Load error:', e);
@@ -266,12 +380,18 @@ function saveUserData() {
     var data = {
         balance: state.balance,
         totalDeposited: state.totalDeposited,
+        totalWon: state.totalWon,
+        maxWin: state.maxWin,
+        maxBet: state.maxBet,
+        winStreak: state.winStreak,
+        currentWinStreak: state.currentWinStreak,
         inventory: state.inventory,
         history: state.history.slice(-50),
         stats: state.stats,
         lastDailyBonus: state.lastDailyBonus,
         dailyStreak: state.dailyStreak,
         casesOpened: state.casesOpened,
+        achievements: state.achievements,
         settings: state.settings
     };
     localStorage.setItem(key, JSON.stringify(data));
@@ -311,6 +431,7 @@ function updateUI() {
     if (statProfitEl) statProfitEl.textContent = (state.stats.profit >= 0 ? '+' : '') + state.stats.profit;
     
     updateRankUI();
+    updateAchievementsUI();
 }
 
 function updateHistoryUI() {
@@ -335,12 +456,12 @@ function updateHistoryUI() {
 }
 
 function getGameEmoji(game) {
-    var emojis = { slots: '🎰', coinflip: '🪙', crash: '🚀', dice: '🎲', roulette: '🎡', highroller: '💰', vip_slots: '👑' };
+    var emojis = { slots: '🎰', coinflip: '🪙', crash: '🚀', dice: '🎲', roulette: '🎡', highroller: '💰', vip_slots: '👑', case: '📦' };
     return emojis[game] || '🎮';
 }
 
 function getGameName(game) {
-    var names = { slots: 'Слоты', coinflip: 'Монетка', crash: 'Краш', dice: 'Кости', roulette: 'Рулетка', highroller: 'High Roller', vip_slots: 'VIP Слоты' };
+    var names = { slots: 'Слоты', coinflip: 'Монетка', crash: 'Краш', dice: 'Кости', roulette: 'Рулетка', highroller: 'High Roller', vip_slots: 'VIP Слоты', case: 'Кейс' };
     return names[game] || game;
 }
 
@@ -357,6 +478,7 @@ function switchTab(tab) {
     else if (tab === 'history') openHistory();
     else if (tab === 'leaderboard') openLeaderboard();
     else if (tab === 'settings') openSettings();
+    else if (tab === 'duels') openDuels();
     else if (tab === 'home' || tab === 'games') {
         closeAllModals();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -431,13 +553,15 @@ function updateInventoryUI() {
     var grid = document.getElementById('inventory-grid');
     var totalItems = document.getElementById('inv-total-items');
     var totalValue = document.getElementById('inv-total-value');
+    var withdrawAllBtn = document.getElementById('withdraw-all-btn');
     
     if (!grid) return;
     
     if (state.inventory.length === 0) {
-        grid.innerHTML = '<div class="empty-state">Инвентарь пуст</div>';
+        grid.innerHTML = '<div class="empty-state">Инвентарь пуст<br><small>Открывайте кейсы!</small></div>';
         if (totalItems) totalItems.textContent = '0';
         if (totalValue) totalValue.textContent = '0 ⭐';
+        if (withdrawAllBtn) withdrawAllBtn.style.display = 'none';
         return;
     }
     
@@ -448,6 +572,7 @@ function updateInventoryUI() {
     
     if (totalItems) totalItems.textContent = state.inventory.length;
     if (totalValue) totalValue.textContent = total + ' ⭐';
+    if (withdrawAllBtn) withdrawAllBtn.style.display = 'block';
     
     var html = '';
     for (var i = 0; i < state.inventory.length; i++) {
@@ -477,7 +602,10 @@ function sellItem(index) {
 }
 
 function withdrawAll() {
-    if (state.inventory.length === 0) return;
+    if (state.inventory.length === 0) {
+        showToast('Инвентарь пуст', 'error');
+        return;
+    }
     
     var total = 0;
     for (var i = 0; i < state.inventory.length; i++) {
@@ -491,7 +619,8 @@ function withdrawAll() {
     updateInventoryUI();
     saveUserData();
     
-    showToast('Выведено: +' + total + ' ⭐', 'success');
+    showToast('Продано всё: +' + total + ' ⭐', 'success');
+    haptic('success');
 }
 
 // ==================== HISTORY ====================
@@ -539,15 +668,23 @@ var demoLeaderboard = {
     profit: [
         { name: 'CryptoKing', value: 15420, avatar: '👑', rank: 'VIP' },
         { name: 'LuckyOne', value: 12350, avatar: '🍀', rank: 'Легенда' },
-        { name: 'ProGamer', value: 9870, avatar: '🎮', rank: 'Мастер' }
+        { name: 'ProGamer', value: 9870, avatar: '🎮', rank: 'Мастер' },
+        { name: 'WinMaster', value: 7650, avatar: '🏆', rank: 'Мастер' },
+        { name: 'StarPlayer', value: 5430, avatar: '⭐', rank: 'Опытный' }
     ],
     wins: [
         { name: 'WinMaster', value: 342, avatar: '🏆', rank: 'Мастер' },
-        { name: 'LuckyOne', value: 298, avatar: '🍀', rank: 'Легенда' }
+        { name: 'LuckyOne', value: 298, avatar: '🍀', rank: 'Легенда' },
+        { name: 'ProGamer', value: 256, avatar: '🎮', rank: 'Мастер' },
+        { name: 'CryptoKing', value: 234, avatar: '👑', rank: 'VIP' },
+        { name: 'StarPlayer', value: 189, avatar: '⭐', rank: 'Опытный' }
     ],
     games: [
         { name: 'ProGamer', value: 1250, avatar: '🎮', rank: 'Мастер' },
-        { name: 'WinMaster', value: 1120, avatar: '🏆', rank: 'Мастер' }
+        { name: 'WinMaster', value: 1120, avatar: '🏆', rank: 'Мастер' },
+        { name: 'LuckyOne', value: 987, avatar: '🍀', rank: 'Легенда' },
+        { name: 'CryptoKing', value: 856, avatar: '👑', rank: 'VIP' },
+        { name: 'StarPlayer', value: 654, avatar: '⭐', rank: 'Опытный' }
     ]
 };
 
@@ -558,16 +695,41 @@ function updateLeaderboardUI() {
     var data = demoLeaderboard[currentLeaderboard] || [];
     var suffix = currentLeaderboard === 'profit' ? ' ⭐' : currentLeaderboard === 'wins' ? ' побед' : ' игр';
     
+    // Add current user to leaderboard
+    var userData = {
+        name: state.userName,
+        avatar: getUserRank().icon,
+        rank: getUserRank().name
+    };
+    
+    if (currentLeaderboard === 'profit') userData.value = state.stats.profit;
+    else if (currentLeaderboard === 'wins') userData.value = state.stats.wins;
+    else userData.value = state.stats.games;
+    
+    // Find user position
+    var userPos = data.length + 1;
+    for (var i = 0; i < data.length; i++) {
+        if (userData.value > data[i].value) {
+            userPos = i + 1;
+            break;
+        }
+    }
+    
     var html = '';
     for (var i = 0; i < data.length; i++) {
         var player = data[i];
         var rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : '#' + (i + 1);
-        html += '<div class="leaderboard-item"><span class="lb-rank">' + rank + '</span>' +
+        var topClass = i === 0 ? ' top-1' : i === 1 ? ' top-2' : i === 2 ? ' top-3' : '';
+        html += '<div class="leaderboard-item' + topClass + '"><span class="lb-rank">' + rank + '</span>' +
             '<span class="lb-avatar">' + player.avatar + '</span>' +
-            '<div class="lb-info"><span class="lb-name">' + player.name + '</span></div>' +
+            '<div class="lb-info"><span class="lb-name">' + player.name + '</span>' +
+            '<span class="lb-player-rank">' + player.rank + '</span></div>' +
             '<span class="lb-value">' + player.value + suffix + '</span></div>';
     }
     list.innerHTML = html;
+    
+    var yourRank = document.getElementById('your-rank');
+    if (yourRank) yourRank.textContent = '#' + userPos + ' (' + userData.value + suffix + ')';
 }
 
 function switchLeaderboard(type) {
@@ -580,7 +742,15 @@ function switchLeaderboard(type) {
 // ==================== GAMES ====================
 function openGame(game) {
     if (!canPlayGame(game)) {
-        showToast('Недоступно для вашего ранга!', 'error');
+        var rank = getUserRank();
+        var needed = null;
+        for (var i = 0; i < RANKS.length; i++) {
+            if (RANKS[i].games.includes(game)) {
+                needed = RANKS[i];
+                break;
+            }
+        }
+        showToast('Нужен ранг: ' + (needed ? needed.name : 'выше'), 'error');
         return;
     }
     
@@ -617,6 +787,8 @@ function selectBet(amount) {
         return;
     }
     state.selectedBet = amount;
+    if (amount > state.maxBet) state.maxBet = amount;
+    
     document.querySelectorAll('.bet-btn').forEach(function(btn) {
         btn.classList.remove('selected');
         if (btn.textContent.includes(amount)) btn.classList.add('selected');
@@ -629,7 +801,7 @@ function getBetButtonsHTML(maxBet) {
     var html = '';
     for (var i = 0; i < bets.length; i++) {
         if (bets[i] <= maxBet) {
-            var selected = bets[i] === 10 ? ' selected' : '';
+            var selected = bets[i] === state.selectedBet ? ' selected' : '';
             html += '<button class="bet-btn' + selected + '" onclick="selectBet(' + bets[i] + ')">' + bets[i] + ' ⭐</button>';
         }
     }
@@ -680,17 +852,7 @@ function playSlots() {
             win = Math.floor(state.selectedBet * 1.5);
         }
         
-        if (win > 0) {
-            state.balance += win;
-            showToast('Победа! +' + win + ' ⭐', 'success');
-            haptic('success');
-        } else {
-            showToast('Не повезло...', 'error');
-            haptic('error');
-        }
-        
-        updateUI();
-        addToHistory('slots', state.selectedBet, win > 0, win);
+        processGameResult('slots', state.selectedBet, win > 0, win);
     }, 1200);
 }
 
@@ -722,19 +884,8 @@ function playCoinflip(choice) {
         
         if (display) display.innerHTML = '<span style="font-size: 64px">' + emoji + '</span>';
         
-        if (won) {
-            var win = Math.floor(state.selectedBet * 1.95);
-            state.balance += win;
-            showToast('Победа! +' + win + ' ⭐', 'success');
-            haptic('success');
-            addToHistory('coinflip', state.selectedBet, true, win);
-        } else {
-            showToast('Не повезло...', 'error');
-            haptic('error');
-            addToHistory('coinflip', state.selectedBet, false, 0);
-        }
-        
-        updateUI();
+        var win = won ? Math.floor(state.selectedBet * 1.95) : 0;
+        processGameResult('coinflip', state.selectedBet, won, win);
     }, 1000);
 }
 
@@ -774,20 +925,15 @@ function playCrash(target) {
             clearInterval(interval);
             
             var won = target <= crash;
+            var win = won ? Math.floor(state.selectedBet * target) : 0;
+            
             if (won) {
-                var win = Math.floor(state.selectedBet * target);
-                state.balance += win;
                 if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">🎉</div><div style="color: var(--success);">+' + win + ' ⭐</div></div>';
-                showToast('Победа! +' + win + ' ⭐', 'success');
-                haptic('success');
-                addToHistory('crash', state.selectedBet, true, win);
             } else {
                 if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">💥</div><div style="color: var(--error);">Крэш на x' + crash + '</div></div>';
-                showToast('Крэш!', 'error');
-                haptic('error');
-                addToHistory('crash', state.selectedBet, false, 0);
             }
-            updateUI();
+            
+            processGameResult('crash', state.selectedBet, won, win);
             return;
         }
         
@@ -828,19 +974,9 @@ function playDice(guess) {
             var result = Math.floor(Math.random() * 6) + 1;
             if (display) display.innerHTML = '<span style="font-size: 80px">' + diceEmojis[result - 1] + '</span>';
             
-            if (result === guess) {
-                var win = state.selectedBet * 5;
-                state.balance += win;
-                showToast('🎯 Угадал! +' + win + ' ⭐', 'success');
-                haptic('success');
-                addToHistory('dice', state.selectedBet, true, win);
-            } else {
-                showToast('Выпало ' + result, 'error');
-                haptic('error');
-                addToHistory('dice', state.selectedBet, false, 0);
-            }
-            
-            updateUI();
+            var won = result === guess;
+            var win = won ? state.selectedBet * 5 : 0;
+            processGameResult('dice', state.selectedBet, won, win);
         }
     }, 100);
 }
@@ -875,20 +1011,11 @@ function playRoulette(choice) {
         
         if (display) display.innerHTML = '<span style="font-size: 64px">' + emoji + '</span>';
         
-        if (result === choice) {
-            var mult = result === 'green' ? 14 : 2;
-            var win = state.selectedBet * mult;
-            state.balance += win;
-            showToast('Победа! +' + win + ' ⭐', 'success');
-            haptic('success');
-            addToHistory('roulette', state.selectedBet, true, win);
-        } else {
-            showToast('Не повезло...', 'error');
-            haptic('error');
-            addToHistory('roulette', state.selectedBet, false, 0);
-        }
+        var won = result === choice;
+        var mult = result === 'green' ? 14 : 2;
+        var win = won ? state.selectedBet * mult : 0;
         
-        updateUI();
+        processGameResult('roulette', state.selectedBet, won, win);
     }, 2000);
 }
 
@@ -911,18 +1038,9 @@ function playHighRoller() {
     updateUI();
     
     setTimeout(function() {
-        if (Math.random() < 0.5) {
-            var win = state.selectedBet * 2;
-            state.balance += win;
-            showToast('🎉 УДВОИЛ! +' + win + ' ⭐', 'success');
-            haptic('success');
-            addToHistory('highroller', state.selectedBet, true, win);
-        } else {
-            showToast('💀 Не повезло...', 'error');
-            haptic('error');
-            addToHistory('highroller', state.selectedBet, false, 0);
-        }
-        updateUI();
+        var won = Math.random() < 0.5;
+        var win = won ? state.selectedBet * 2 : 0;
+        processGameResult('highroller', state.selectedBet, won, win);
     }, 1500);
 }
 
@@ -970,18 +1088,31 @@ function playVIPSlots() {
             win = Math.floor(state.selectedBet * 2.5);
         }
         
-        if (win > 0) {
-            state.balance += win;
-            showToast('👑 VIP Победа! +' + win + ' ⭐', 'success');
-            haptic('success');
-        } else {
-            showToast('Не повезло...', 'error');
-            haptic('error');
-        }
-        
-        updateUI();
-        addToHistory('vip_slots', state.selectedBet, win > 0, win);
+        processGameResult('vip_slots', state.selectedBet, win > 0, win);
     }, 1500);
+}
+
+// Unified game result processing
+function processGameResult(game, bet, won, amount) {
+    if (won && amount > 0) {
+        state.balance += amount;
+        state.totalWon += amount;
+        if (amount > state.maxWin) state.maxWin = amount;
+        state.currentWinStreak++;
+        if (state.currentWinStreak > state.winStreak) state.winStreak = state.currentWinStreak;
+        
+        showToast('Победа! +' + amount + ' ⭐', 'success');
+        haptic('success');
+    } else {
+        state.currentWinStreak = 0;
+        showToast('Не повезло...', 'error');
+        haptic('error');
+    }
+    
+    updateUI();
+    addToHistory(game, bet, won, amount);
+    reportGameResult(game, bet, won, amount);
+    checkAchievements();
 }
 
 function addToHistory(game, bet, won, amount) {
@@ -998,7 +1129,24 @@ function updateDuelsUI() {
     var list = document.getElementById('duels-list');
     if (!list) return;
     
-    list.innerHTML = '<div class="duel-create"><h4>⚔️ Дуэли</h4><p>Скоро!</p></div>';
+    list.innerHTML = '<div class="duel-create"><h4>⚔️ Дуэли с друзьями</h4>' +
+        '<p style="color: var(--text-secondary); margin-bottom: 16px;">Бросай вызов друзьям и выигрывай!</p>' +
+        '<div class="duel-amounts">' +
+        '<button class="duel-amount-btn" onclick="createDuel(50)">50 ⭐</button>' +
+        '<button class="duel-amount-btn" onclick="createDuel(100)">100 ⭐</button>' +
+        '<button class="duel-amount-btn" onclick="createDuel(250)">250 ⭐</button>' +
+        '</div>' +
+        '<div style="margin-top: 20px; padding: 15px; background: var(--glass); border-radius: 12px;">' +
+        '<p style="text-align: center; color: var(--text-muted); font-size: 13px;">🚧 Полная версия дуэлей скоро!</p>' +
+        '</div></div>';
+}
+
+function createDuel(amount) {
+    if (state.balance < amount) {
+        showToast('Недостаточно средств!', 'error');
+        return;
+    }
+    showToast('🚧 Дуэли скоро будут доступны!', 'info');
 }
 
 // ==================== CASES ====================
@@ -1055,8 +1203,10 @@ function openCase(type) {
     }
     
     state.inventory.push({ icon: reward.icon, name: reward.name, value: reward.value, id: Date.now() });
-    updateUI();
+    
+    addToHistory('case', caseData.price, true, reward.value);
     saveUserData();
+    checkAchievements();
     
     var gameTitle = document.getElementById('game-title');
     var gameBody = document.getElementById('game-body');
@@ -1132,6 +1282,10 @@ async function processDeposit() {
             tx_hash: result.txHash || ''
         });
         
+        state.totalDeposited += state.selectedDeposit;
+        saveUserData();
+        checkAchievements();
+        
         haptic('success');
         closeWallet();
     }
@@ -1152,6 +1306,11 @@ function selectWithdrawMethod(method) {
     
     if (inputSection) inputSection.style.display = 'block';
     if (input) input.max = state.balance;
+    
+    document.querySelectorAll('.withdraw-option').forEach(function(opt) {
+        opt.classList.remove('selected');
+    });
+    event.target.closest('.withdraw-option').classList.add('selected');
 }
 
 function processWithdraw() {
@@ -1200,6 +1359,7 @@ function initDailyBonus() {
     var today = new Date().toDateString();
     var bonusEl = document.getElementById('daily-bonus');
     var statusEl = document.getElementById('bonus-status');
+    var streakEl = document.getElementById('bonus-streak');
     
     if (state.lastDailyBonus === today) {
         if (bonusEl) bonusEl.classList.add('claimed');
@@ -1208,6 +1368,8 @@ function initDailyBonus() {
         if (bonusEl) bonusEl.classList.remove('claimed');
         if (statusEl) statusEl.textContent = 'Доступен!';
     }
+    
+    if (streakEl) streakEl.textContent = 'День ' + (state.dailyStreak + 1);
     
     var streakBonus = Math.min(state.dailyStreak, 7);
     var bonusAmount = 50 + (streakBonus * 10);
@@ -1219,7 +1381,7 @@ function claimDailyBonus() {
     var today = new Date().toDateString();
     
     if (state.lastDailyBonus === today) {
-        showToast('Бонус уже получен!', 'error');
+        showToast('Бонус уже получен! Приходи завтра.', 'error');
         return;
     }
     
@@ -1241,8 +1403,9 @@ function claimDailyBonus() {
     updateUI();
     initDailyBonus();
     saveUserData();
+    checkAchievements();
     
-    showToast('🎁 Бонус: +' + bonusAmount + ' ⭐', 'success');
+    showToast('🎁 Бонус: +' + bonusAmount + ' ⭐ (День ' + (state.dailyStreak + 1) + ')', 'success');
     haptic('success');
 }
 
@@ -1330,3 +1493,4 @@ window.switchLeaderboard = switchLeaderboard;
 window.claimDailyBonus = claimDailyBonus;
 window.showAllCases = showAllCases;
 window.toggleSetting = toggleSetting;
+window.createDuel = createDuel;
