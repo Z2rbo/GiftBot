@@ -1,5 +1,6 @@
 # Environment variables
 .env
+railway_env.txt
 
 # Python
 __pycache__/
