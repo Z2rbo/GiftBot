@@ -1,7 +1,7 @@
 {
   "url": "https://gift-bot-pi.vercel.app",
   "name": "GiftBot Casino",
-  "iconUrl": "https://gift-bot-pi.vercel.app/icon.png",
+  "iconUrl": "https://gift-bot-pi.vercel.app/bot_avatar.png",
   "termsOfUseUrl": "https://gift-bot-pi.vercel.app/terms",
   "privacyPolicyUrl": "https://gift-bot-pi.vercel.app/privacy"
 }

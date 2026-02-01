@@ -1,9 +1,11 @@
 // ==================== CONFIG ====================
 const CONFIG = {
     DEPOSIT_WALLET: 'UQB6crKdkA_kwYjiq18CPDcJc2BeWwJurkjYsnR7xCfIuM2v',
-    TON_TO_STARS: 100, // 1 TON = 100 stars
+    TON_TO_STARS: 100,
     MIN_WITHDRAW_STARS: 100,
-    MIN_WITHDRAW_TON: 0.1
+    MIN_WITHDRAW_TON: 0.1,
+    MIN_DEPOSIT_TON: 0.1,
+    MAX_WITHDRAW_STARS: 100000
 };
 
 // ==================== RANKS ====================
@@ -28,20 +30,13 @@ const state = {
     selectedBet: 10,
     selectedDeposit: 0,
     tonWallet: null,
-    ethWallet: null,
     userId: null,
     userName: 'Игрок',
     lastDailyBonus: null,
     dailyStreak: 0,
     achievements: {},
     casesOpened: 0,
-    settings: {
-        sound: true,
-        notifications: true,
-        autoCollect: false
-    },
-    duels: [],
-    pendingDuel: null
+    settings: { sound: true, notifications: true, autoCollect: false }
 };
 
 let tonConnectUI = null;
@@ -58,17 +53,13 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(initTonConnect, 1000);
     setTimeout(function() {
         initDailyBonus();
-        initAchievements();
         initJackpot();
     }, 500);
     
-    // Add click handlers to nav items
     document.querySelectorAll('.nav-item').forEach(function(item) {
         item.addEventListener('click', function(e) {
             e.preventDefault();
-            e.stopPropagation();
             var tab = this.getAttribute('data-tab') || this.dataset.tab;
-            console.log('Nav clicked:', tab);
             if (tab) switchTab(tab);
         });
     });
@@ -90,10 +81,6 @@ function initTelegram() {
             document.documentElement.style.setProperty('--bg-primary', tg.themeParams.bg_color || '#05051a');
             document.documentElement.style.setProperty('--bg-secondary', tg.themeParams.secondary_bg_color || '#0d0d2b');
         }
-        
-        console.log('✅ Telegram WebApp initialized');
-    } else {
-        console.log('ℹ️ Running outside Telegram');
     }
 }
 
@@ -113,15 +100,11 @@ function getUserRank() {
 function getNextRank() {
     var currentRank = getUserRank();
     var idx = RANKS.indexOf(currentRank);
-    if (idx < RANKS.length - 1) {
-        return RANKS[idx + 1];
-    }
-    return null;
+    return idx < RANKS.length - 1 ? RANKS[idx + 1] : null;
 }
 
 function canPlayGame(gameType) {
-    var rank = getUserRank();
-    return rank.games.includes(gameType);
+    return getUserRank().games.includes(gameType);
 }
 
 function getMaxBet() {
@@ -140,7 +123,6 @@ function updateRankUI() {
     if (rankIconEl) rankIconEl.textContent = rank.icon;
     if (maxBetEl) maxBetEl.textContent = 'Макс. ставка: ' + rank.maxBet + ' ⭐';
     
-    // Update progress to next rank
     if (nextRank) {
         var progress = document.getElementById('rank-progress');
         var progressText = document.getElementById('rank-progress-text');
@@ -156,7 +138,7 @@ function updateRankUI() {
 function initTonConnect() {
     try {
         if (typeof TON_CONNECT_UI === 'undefined') {
-            console.log('⏳ TON_CONNECT_UI not loaded yet');
+            console.log('⏳ TON_CONNECT_UI not loaded');
             return;
         }
         
@@ -198,8 +180,6 @@ function initTonConnect() {
 }
 
 function connectTON() {
-    console.log('🔗 connectTON called');
-    
     if (!tonConnectUI) {
         showToast('TON Connect загружается...', 'error');
         initTonConnect();
@@ -214,19 +194,16 @@ function connectTON() {
     }
 }
 
-function connectMetamask() {
-    showToast('Только TON кошельки поддерживаются', 'error');
-}
-
-// ==================== REAL TON PAYMENTS ====================
+// ==================== TON TRANSACTIONS ====================
 async function sendTONTransaction(amountTON) {
     if (!state.tonWallet || !tonConnectUI) {
         showToast('Подключите TON кошелёк!', 'error');
-        return false;
+        return { success: false, error: 'wallet_not_connected' };
     }
     
     try {
         var amountNanoton = Math.floor(amountTON * 1000000000);
+        var paymentComment = 'deposit_' + (state.userId || Date.now());
         
         var transaction = {
             validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -241,19 +218,24 @@ async function sendTONTransaction(amountTON) {
         
         var result = await tonConnectUI.sendTransaction(transaction);
         
-        if (result) {
-            console.log('✅ Transaction sent:', result);
-            return true;
+        if (result && result.boc) {
+            var txHash = result.boc.substring(0, 64);
+            return { success: true, boc: result.boc, txHash: txHash, comment: paymentComment };
         }
+        
+        return { success: false, error: 'no_result' };
+        
     } catch (e) {
         console.error('❌ Transaction error:', e);
+        
         if (e.message && e.message.includes('User rejected')) {
             showToast('Транзакция отменена', 'error');
-        } else {
-            showToast('Ошибка транзакции: ' + (e.message || 'Попробуйте снова'), 'error');
+            return { success: false, error: 'user_rejected' };
         }
+        
+        showToast('Ошибка: ' + (e.message || 'Попробуйте снова'), 'error');
+        return { success: false, error: e.message || 'unknown' };
     }
-    return false;
 }
 
 // ==================== DATA ====================
@@ -271,12 +253,10 @@ function loadUserData() {
             state.stats = data.stats || { games: 0, wins: 0, profit: 0 };
             state.lastDailyBonus = data.lastDailyBonus || null;
             state.dailyStreak = data.dailyStreak || 0;
-            state.achievements = data.achievements || {};
             state.casesOpened = data.casesOpened || 0;
             state.settings = data.settings || { sound: true, notifications: true, autoCollect: false };
-            console.log('✅ User data loaded');
         } catch (e) {
-            console.error('❌ Load error:', e);
+            console.error('Load error:', e);
         }
     }
 }
@@ -291,47 +271,25 @@ function saveUserData() {
         stats: state.stats,
         lastDailyBonus: state.lastDailyBonus,
         dailyStreak: state.dailyStreak,
-        achievements: state.achievements,
         casesOpened: state.casesOpened,
-        settings: state.settings,
-        savedAt: Date.now()
+        settings: state.settings
     };
     localStorage.setItem(key, JSON.stringify(data));
 }
 
 function sendToBot(action, data) {
-    if (!tg || !tg.sendData) {
-        console.log('Telegram WebApp API not available');
-        return;
-    }
+    if (!tg || !tg.sendData) return;
     
     try {
         var payload = Object.assign({ action: action }, data);
         tg.sendData(JSON.stringify(payload));
-        console.log('✅ Sent to bot:', action, data);
     } catch (e) {
-        console.error('❌ Error sending to bot:', e);
+        console.error('Send error:', e);
     }
 }
 
 function sendWalletToBot(walletType, walletAddress) {
     sendToBot('wallet_connected', { wallet_type: walletType, wallet_address: walletAddress });
-}
-
-function notifyDeposit(amountTON, amountStars) {
-    sendToBot('deposit', { 
-        amount_ton: amountTON, 
-        amount_stars: amountStars,
-        wallet: state.tonWallet?.account?.address || 'unknown'
-    });
-}
-
-function notifyWithdraw(amountStars, method) {
-    sendToBot('withdraw_request', { 
-        amount_stars: amountStars, 
-        method: method,
-        wallet: state.tonWallet?.account?.address || 'unknown'
-    });
 }
 
 // ==================== UI ====================
@@ -377,41 +335,29 @@ function updateHistoryUI() {
 }
 
 function getGameEmoji(game) {
-    var emojis = { slots: '🎰', coinflip: '🪙', crash: '🚀', dice: '🎲', roulette: '🎡', highroller: '💰', vip_slots: '👑', duel: '⚔️' };
+    var emojis = { slots: '🎰', coinflip: '🪙', crash: '🚀', dice: '🎲', roulette: '🎡', highroller: '💰', vip_slots: '👑' };
     return emojis[game] || '🎮';
 }
 
 function getGameName(game) {
-    var names = { slots: 'Слоты', coinflip: 'Монетка', crash: 'Краш', dice: 'Кости', roulette: 'Рулетка', highroller: 'High Roller', vip_slots: 'VIP Слоты', duel: 'Дуэль' };
+    var names = { slots: 'Слоты', coinflip: 'Монетка', crash: 'Краш', dice: 'Кости', roulette: 'Рулетка', highroller: 'High Roller', vip_slots: 'VIP Слоты' };
     return names[game] || game;
 }
 
 // ==================== NAVIGATION ====================
 function switchTab(tab) {
-    console.log('📱 switchTab:', tab);
-    
     document.querySelectorAll('.nav-item').forEach(function(el) {
         el.classList.remove('active');
-        if (el.getAttribute('data-tab') === tab || el.dataset.tab === tab) {
-            el.classList.add('active');
-        }
+        if (el.getAttribute('data-tab') === tab) el.classList.add('active');
     });
     
-    if (tab === 'wallet') {
-        openWallet();
-    } else if (tab === 'profile') {
-        openProfile();
-    } else if (tab === 'inventory') {
-        openInventory();
-    } else if (tab === 'history') {
-        openHistory();
-    } else if (tab === 'leaderboard') {
-        openLeaderboard();
-    } else if (tab === 'settings') {
-        openSettings();
-    } else if (tab === 'duels') {
-        openDuels();
-    } else if (tab === 'home' || tab === 'games') {
+    if (tab === 'wallet') openWallet();
+    else if (tab === 'profile') openProfile();
+    else if (tab === 'inventory') openInventory();
+    else if (tab === 'history') openHistory();
+    else if (tab === 'leaderboard') openLeaderboard();
+    else if (tab === 'settings') openSettings();
+    else if (tab === 'home' || tab === 'games') {
         closeAllModals();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -434,85 +380,33 @@ function closeModal(modalId) {
     if (modal) modal.classList.remove('active');
 }
 
-function openWallet() {
-    console.log('💳 openWallet');
-    updateDepositUI();
-    openModal('wallet-modal');
-}
-
+function openWallet() { updateDepositUI(); openModal('wallet-modal'); }
 function closeWallet() { closeModal('wallet-modal'); }
-
-function openProfile() {
-    console.log('👤 openProfile');
-    updateUI();
-    updateHistoryUI();
-    openModal('profile-modal');
-}
-
+function openProfile() { updateUI(); updateHistoryUI(); openModal('profile-modal'); }
 function closeProfile() { closeModal('profile-modal'); }
-
-function openInventory() {
-    console.log('🎒 openInventory');
-    updateInventoryUI();
-    openModal('inventory-modal');
-}
-
+function openInventory() { updateInventoryUI(); openModal('inventory-modal'); }
 function closeInventory() { closeModal('inventory-modal'); }
-
-function openHistory() {
-    console.log('📜 openHistory');
-    updateFullHistoryUI();
-    openModal('history-modal');
-}
-
+function openHistory() { updateFullHistoryUI(); openModal('history-modal'); }
 function closeHistory() { closeModal('history-modal'); }
-
-function openLeaderboard() {
-    console.log('🏆 openLeaderboard');
-    updateLeaderboardUI();
-    openModal('leaderboard-modal');
-}
-
+function openLeaderboard() { updateLeaderboardUI(); openModal('leaderboard-modal'); }
 function closeLeaderboard() { closeModal('leaderboard-modal'); }
-
 function openWithdraw() {
-    console.log('💸 openWithdraw');
     var withdrawAvailable = document.getElementById('withdraw-available');
     if (withdrawAvailable) withdrawAvailable.textContent = state.balance + ' ⭐';
-    
     var inputSection = document.getElementById('withdraw-input-section');
     if (inputSection) inputSection.style.display = 'none';
-    
     openModal('withdraw-modal');
 }
-
 function closeWithdraw() { closeModal('withdraw-modal'); }
-
-function openSettings() {
-    console.log('⚙️ openSettings');
-    updateSettingsUI();
-    openModal('settings-modal');
-}
-
+function openSettings() { updateSettingsUI(); openModal('settings-modal'); }
 function closeSettings() { closeModal('settings-modal'); }
-
-function openDuels() {
-    console.log('⚔️ openDuels');
-    updateDuelsUI();
-    openModal('duels-modal');
-}
-
+function openDuels() { updateDuelsUI(); openModal('duels-modal'); }
 function closeDuels() { closeModal('duels-modal'); }
-
 function closeOverlay() { closeAllModals(); }
-
 function closeAllModals() {
     var overlay = document.getElementById('overlay');
     if (overlay) overlay.classList.remove('active');
-    
-    document.querySelectorAll('.modal').forEach(function(m) {
-        m.classList.remove('active');
-    });
+    document.querySelectorAll('.modal').forEach(function(m) { m.classList.remove('active'); });
 }
 
 // ==================== SETTINGS ====================
@@ -537,15 +431,13 @@ function updateInventoryUI() {
     var grid = document.getElementById('inventory-grid');
     var totalItems = document.getElementById('inv-total-items');
     var totalValue = document.getElementById('inv-total-value');
-    var withdrawBtn = document.getElementById('withdraw-all-btn');
     
     if (!grid) return;
     
     if (state.inventory.length === 0) {
-        grid.innerHTML = '<div class="empty-state">Инвентарь пуст. Открывайте кейсы!</div>';
+        grid.innerHTML = '<div class="empty-state">Инвентарь пуст</div>';
         if (totalItems) totalItems.textContent = '0';
         if (totalValue) totalValue.textContent = '0 ⭐';
-        if (withdrawBtn) withdrawBtn.style.display = 'none';
         return;
     }
     
@@ -556,17 +448,15 @@ function updateInventoryUI() {
     
     if (totalItems) totalItems.textContent = state.inventory.length;
     if (totalValue) totalValue.textContent = total + ' ⭐';
-    if (withdrawBtn) withdrawBtn.style.display = 'block';
     
     var html = '';
     for (var i = 0; i < state.inventory.length; i++) {
         var item = state.inventory[i];
-        html += '<div class="inventory-item" onclick="sellItem(' + i + ')">';
-        html += '<div class="item-icon">' + item.icon + '</div>';
-        html += '<div class="item-name">' + item.name + '</div>';
-        html += '<div class="item-value">' + item.value + ' ⭐</div>';
-        html += '<button class="sell-btn">Продать</button>';
-        html += '</div>';
+        html += '<div class="inventory-item" onclick="sellItem(' + i + ')">' +
+            '<div class="item-icon">' + item.icon + '</div>' +
+            '<div class="item-name">' + item.name + '</div>' +
+            '<div class="item-value">' + item.value + ' ⭐</div>' +
+            '<button class="sell-btn">Продать</button></div>';
     }
     grid.innerHTML = html;
 }
@@ -582,7 +472,7 @@ function sellItem(index) {
     updateInventoryUI();
     saveUserData();
     
-    showToast('Продано: ' + item.name + ' +' + item.value + ' ⭐', 'success');
+    showToast('Продано: +' + item.value + ' ⭐', 'success');
     haptic('success');
 }
 
@@ -602,7 +492,6 @@ function withdrawAll() {
     saveUserData();
     
     showToast('Выведено: +' + total + ' ⭐', 'success');
-    haptic('success');
 }
 
 // ==================== HISTORY ====================
@@ -613,11 +502,8 @@ function updateFullHistoryUI() {
     if (!list) return;
     
     var filtered = state.history;
-    if (historyFilter === 'wins') {
-        filtered = state.history.filter(function(h) { return h.won; });
-    } else if (historyFilter === 'losses') {
-        filtered = state.history.filter(function(h) { return !h.won; });
-    }
+    if (historyFilter === 'wins') filtered = state.history.filter(function(h) { return h.won; });
+    else if (historyFilter === 'losses') filtered = state.history.filter(function(h) { return !h.won; });
     
     if (filtered.length === 0) {
         list.innerHTML = '<div class="empty-state">История пуста</div>';
@@ -630,54 +516,38 @@ function updateFullHistoryUI() {
         var date = new Date(h.time);
         var timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
         
-        html += '<div class="history-item-full">';
-        html += '<div class="history-left">';
-        html += '<span class="history-game-icon">' + getGameEmoji(h.game) + '</span>';
-        html += '<div class="history-details">';
-        html += '<span class="history-game-name">' + getGameName(h.game) + '</span>';
-        html += '<span class="history-time">' + timeStr + '</span>';
-        html += '</div></div>';
-        html += '<div class="history-right">';
-        html += '<span class="history-bet">Ставка: ' + h.bet + ' ⭐</span>';
-        html += '<span class="history-result ' + (h.won ? 'win' : 'lose') + '">' + (h.won ? '+' + h.amount : '-' + h.bet) + ' ⭐</span>';
-        html += '</div></div>';
+        html += '<div class="history-item-full">' +
+            '<div class="history-left"><span class="history-game-icon">' + getGameEmoji(h.game) + '</span>' +
+            '<div class="history-details"><span class="history-game-name">' + getGameName(h.game) + '</span>' +
+            '<span class="history-time">' + timeStr + '</span></div></div>' +
+            '<div class="history-right"><span class="history-bet">Ставка: ' + h.bet + ' ⭐</span>' +
+            '<span class="history-result ' + (h.won ? 'win' : 'lose') + '">' + (h.won ? '+' + h.amount : '-' + h.bet) + ' ⭐</span></div></div>';
     }
     list.innerHTML = html;
 }
 
 function filterHistory(filter) {
     historyFilter = filter;
-    document.querySelectorAll('.filter-btn').forEach(function(btn) {
-        btn.classList.remove('active');
-    });
+    document.querySelectorAll('.filter-btn').forEach(function(btn) { btn.classList.remove('active'); });
     event.target.classList.add('active');
     updateFullHistoryUI();
 }
 
 // ==================== LEADERBOARD ====================
 var currentLeaderboard = 'profit';
-
 var demoLeaderboard = {
     profit: [
         { name: 'CryptoKing', value: 15420, avatar: '👑', rank: 'VIP' },
         { name: 'LuckyOne', value: 12350, avatar: '🍀', rank: 'Легенда' },
-        { name: 'ProGamer', value: 9870, avatar: '🎮', rank: 'Мастер' },
-        { name: 'StarPlayer', value: 7650, avatar: '⭐', rank: 'Опытный' },
-        { name: 'WinMaster', value: 6230, avatar: '🏆', rank: 'Мастер' }
+        { name: 'ProGamer', value: 9870, avatar: '🎮', rank: 'Мастер' }
     ],
     wins: [
         { name: 'WinMaster', value: 342, avatar: '🏆', rank: 'Мастер' },
-        { name: 'LuckyOne', value: 298, avatar: '🍀', rank: 'Легенда' },
-        { name: 'ProGamer', value: 267, avatar: '🎮', rank: 'Мастер' },
-        { name: 'CryptoKing', value: 234, avatar: '👑', rank: 'VIP' },
-        { name: 'StarPlayer', value: 198, avatar: '⭐', rank: 'Опытный' }
+        { name: 'LuckyOne', value: 298, avatar: '🍀', rank: 'Легенда' }
     ],
     games: [
         { name: 'ProGamer', value: 1250, avatar: '🎮', rank: 'Мастер' },
-        { name: 'WinMaster', value: 1120, avatar: '🏆', rank: 'Мастер' },
-        { name: 'LuckyOne', value: 980, avatar: '🍀', rank: 'Легенда' },
-        { name: 'CryptoKing', value: 870, avatar: '👑', rank: 'VIP' },
-        { name: 'StarPlayer', value: 650, avatar: '⭐', rank: 'Опытный' }
+        { name: 'WinMaster', value: 1120, avatar: '🏆', rank: 'Мастер' }
     ]
 };
 
@@ -685,26 +555,19 @@ function updateLeaderboardUI() {
     var list = document.getElementById('leaderboard-list');
     if (!list) return;
     
-    var data = demoLeaderboard[currentLeaderboard];
+    var data = demoLeaderboard[currentLeaderboard] || [];
     var suffix = currentLeaderboard === 'profit' ? ' ⭐' : currentLeaderboard === 'wins' ? ' побед' : ' игр';
     
     var html = '';
     for (var i = 0; i < data.length; i++) {
         var player = data[i];
         var rank = i < 3 ? ['🥇', '🥈', '🥉'][i] : '#' + (i + 1);
-        var topClass = i < 3 ? ' top-' + (i + 1) : '';
-        
-        html += '<div class="leaderboard-item' + topClass + '">';
-        html += '<span class="lb-rank">' + rank + '</span>';
-        html += '<span class="lb-avatar">' + player.avatar + '</span>';
-        html += '<div class="lb-info"><span class="lb-name">' + player.name + '</span><span class="lb-player-rank">' + player.rank + '</span></div>';
-        html += '<span class="lb-value">' + player.value.toLocaleString() + suffix + '</span>';
-        html += '</div>';
+        html += '<div class="leaderboard-item"><span class="lb-rank">' + rank + '</span>' +
+            '<span class="lb-avatar">' + player.avatar + '</span>' +
+            '<div class="lb-info"><span class="lb-name">' + player.name + '</span></div>' +
+            '<span class="lb-value">' + player.value + suffix + '</span></div>';
     }
     list.innerHTML = html;
-    
-    var yourRank = document.getElementById('your-rank');
-    if (yourRank) yourRank.textContent = '#' + (Math.floor(Math.random() * 100) + 10);
 }
 
 function switchLeaderboard(type) {
@@ -716,11 +579,8 @@ function switchLeaderboard(type) {
 
 // ==================== GAMES ====================
 function openGame(game) {
-    console.log('🎮 openGame:', game);
-    
     if (!canPlayGame(game)) {
-        var rank = getUserRank();
-        showToast('Недоступно для ранга ' + rank.name + '! Пополните баланс.', 'error');
+        showToast('Недоступно для вашего ранга!', 'error');
         return;
     }
     
@@ -729,31 +589,20 @@ function openGame(game) {
     var gameTitle = document.getElementById('game-title');
     var gameBody = document.getElementById('game-body');
     
-    if (!gameTitle || !gameBody) {
-        showToast('Ошибка открытия игры', 'error');
-        return;
-    }
+    if (!gameTitle || !gameBody) return;
     
     gameTitle.textContent = getGameEmoji(game) + ' ' + getGameName(game);
     
     var maxBet = getMaxBet();
     var html = '';
     
-    if (game === 'slots') {
-        html = getSlotsHTML(maxBet);
-    } else if (game === 'coinflip') {
-        html = getCoinflipHTML(maxBet);
-    } else if (game === 'crash') {
-        html = getCrashHTML(maxBet);
-    } else if (game === 'dice') {
-        html = getDiceHTML(maxBet);
-    } else if (game === 'roulette') {
-        html = getRouletteHTML(maxBet);
-    } else if (game === 'highroller') {
-        html = getHighRollerHTML(maxBet);
-    } else if (game === 'vip_slots') {
-        html = getVIPSlotsHTML(maxBet);
-    }
+    if (game === 'slots') html = getSlotsHTML(maxBet);
+    else if (game === 'coinflip') html = getCoinflipHTML(maxBet);
+    else if (game === 'crash') html = getCrashHTML(maxBet);
+    else if (game === 'dice') html = getDiceHTML(maxBet);
+    else if (game === 'roulette') html = getRouletteHTML(maxBet);
+    else if (game === 'highroller') html = getHighRollerHTML(maxBet);
+    else if (game === 'vip_slots') html = getVIPSlotsHTML(maxBet);
     
     gameBody.innerHTML = html;
     openModal('game-modal');
@@ -764,15 +613,13 @@ function closeGame() { closeModal('game-modal'); }
 function selectBet(amount) {
     var maxBet = getMaxBet();
     if (amount > maxBet) {
-        showToast('Макс. ставка для вашего ранга: ' + maxBet + ' ⭐', 'error');
+        showToast('Макс. ставка: ' + maxBet + ' ⭐', 'error');
         return;
     }
     state.selectedBet = amount;
     document.querySelectorAll('.bet-btn').forEach(function(btn) {
         btn.classList.remove('selected');
-        if (btn.textContent.includes(amount)) {
-            btn.classList.add('selected');
-        }
+        if (btn.textContent.includes(amount)) btn.classList.add('selected');
     });
     haptic('light');
 }
@@ -791,14 +638,10 @@ function getBetButtonsHTML(maxBet) {
 
 // Slots
 function getSlotsHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>Ставка (макс: ' + maxBet + ' ⭐)</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="game-display"><div class="slot-reels">' +
-        '<div class="slot-reel" id="reel1">❓</div>' +
-        '<div class="slot-reel" id="reel2">❓</div>' +
-        '<div class="slot-reel" id="reel3">❓</div>' +
-        '</div></div>' +
-        '<button class="play-btn" onclick="playSlots()">🎰 Крутить</button></div>';
+        '<div class="slot-reel" id="reel1">❓</div><div class="slot-reel" id="reel2">❓</div><div class="slot-reel" id="reel3">❓</div>' +
+        '</div></div><button class="play-btn" onclick="playSlots()">🎰 Крутить</button></div>';
 }
 
 function playSlots() {
@@ -842,7 +685,7 @@ function playSlots() {
             showToast('Победа! +' + win + ' ⭐', 'success');
             haptic('success');
         } else {
-            showToast('Не повезло... -' + state.selectedBet + ' ⭐', 'error');
+            showToast('Не повезло...', 'error');
             haptic('error');
         }
         
@@ -853,14 +696,11 @@ function playSlots() {
 
 // Coinflip
 function getCoinflipHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="game-display" id="coin-display"><span style="font-size: 64px">🪙</span></div>' +
-        '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">Выигрыш: x1.95</p>' +
-        '<div style="display: flex; gap: 12px;">' +
-        '<button class="play-btn" style="background: linear-gradient(135deg, #f39c12, #e67e22);" onclick="playCoinflip(\'heads\')">🦅 Орёл</button>' +
-        '<button class="play-btn" style="background: linear-gradient(135deg, #95a5a6, #7f8c8d);" onclick="playCoinflip(\'tails\')">🪙 Решка</button>' +
-        '</div></div>';
+        '<p style="text-align: center; color: var(--text-secondary);">Выигрыш: x1.95</p>' +
+        '<div style="display: flex; gap: 12px;"><button class="play-btn" style="background: #f39c12;" onclick="playCoinflip(\'heads\')">🦅 Орёл</button>' +
+        '<button class="play-btn" style="background: #95a5a6;" onclick="playCoinflip(\'tails\')">🪙 Решка</button></div></div>';
 }
 
 function playCoinflip(choice) {
@@ -889,7 +729,7 @@ function playCoinflip(choice) {
             haptic('success');
             addToHistory('coinflip', state.selectedBet, true, win);
         } else {
-            showToast('Не повезло... -' + state.selectedBet + ' ⭐', 'error');
+            showToast('Не повезло...', 'error');
             haptic('error');
             addToHistory('coinflip', state.selectedBet, false, 0);
         }
@@ -900,18 +740,14 @@ function playCoinflip(choice) {
 
 // Crash
 function getCrashHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="bet-section"><h4>Выйти на</h4><div class="bet-buttons">' +
         '<button class="bet-btn" onclick="playCrash(1.5)">x1.5</button>' +
         '<button class="bet-btn" onclick="playCrash(2)">x2</button>' +
         '<button class="bet-btn" onclick="playCrash(3)">x3</button>' +
-        '<button class="bet-btn" onclick="playCrash(5)">x5</button>' +
-        '</div></div>' +
+        '<button class="bet-btn" onclick="playCrash(5)">x5</button></div></div>' +
         '<div class="game-display" id="crash-display"><div style="text-align: center">' +
-        '<div style="font-size: 48px">🚀</div>' +
-        '<div style="font-size: 32px; font-weight: bold; margin-top: 10px">x1.00</div>' +
-        '</div></div></div>';
+        '<div style="font-size: 48px">🚀</div><div style="font-size: 32px; font-weight: bold;">x1.00</div></div></div></div>';
 }
 
 function playCrash(target) {
@@ -926,9 +762,7 @@ function playCrash(target) {
     var display = document.getElementById('crash-display');
     var crash = 1.0;
     
-    while (Math.random() > 0.05 && crash < 20) {
-        crash += 0.1;
-    }
+    while (Math.random() > 0.05 && crash < 20) crash += 0.1;
     crash = Math.round(crash * 10) / 10;
     
     var current = 1.0;
@@ -943,13 +777,13 @@ function playCrash(target) {
             if (won) {
                 var win = Math.floor(state.selectedBet * target);
                 state.balance += win;
-                if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">🎉</div><div style="font-size: 24px; color: var(--success); margin-top: 10px">Успел на x' + target + '!</div><div style="font-size: 20px; margin-top: 5px">+' + win + ' ⭐</div></div>';
+                if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">🎉</div><div style="color: var(--success);">+' + win + ' ⭐</div></div>';
                 showToast('Победа! +' + win + ' ⭐', 'success');
                 haptic('success');
                 addToHistory('crash', state.selectedBet, true, win);
             } else {
-                if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">💥</div><div style="font-size: 24px; color: var(--error); margin-top: 10px">Крэш на x' + crash + '</div><div style="font-size: 20px; margin-top: 5px">-' + state.selectedBet + ' ⭐</div></div>';
-                showToast('Крэш! -' + state.selectedBet + ' ⭐', 'error');
+                if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">💥</div><div style="color: var(--error);">Крэш на x' + crash + '</div></div>';
+                showToast('Крэш!', 'error');
                 haptic('error');
                 addToHistory('crash', state.selectedBet, false, 0);
             }
@@ -957,24 +791,19 @@ function playCrash(target) {
             return;
         }
         
-        if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">🚀</div><div style="font-size: 32px; font-weight: bold; margin-top: 10px; color: ' + (current > 2 ? 'var(--success)' : 'white') + '">x' + current.toFixed(1) + '</div></div>';
+        if (display) display.innerHTML = '<div style="text-align: center"><div style="font-size: 48px">🚀</div><div style="font-size: 32px; font-weight: bold;">x' + current.toFixed(1) + '</div></div>';
     }, 100);
 }
 
 // Dice
 function getDiceHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="game-display" id="dice-display"><span style="font-size: 80px">🎲</span></div>' +
-        '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">Угадай число (1-6). Выигрыш: x5</p>' +
-        '<div class="bet-buttons" style="justify-content: center; margin-bottom: 16px;">' +
-        '<button class="bet-btn" onclick="playDice(1)">1</button>' +
-        '<button class="bet-btn" onclick="playDice(2)">2</button>' +
-        '<button class="bet-btn" onclick="playDice(3)">3</button>' +
-        '<button class="bet-btn" onclick="playDice(4)">4</button>' +
-        '<button class="bet-btn" onclick="playDice(5)">5</button>' +
-        '<button class="bet-btn" onclick="playDice(6)">6</button>' +
-        '</div></div>';
+        '<p style="text-align: center; color: var(--text-secondary);">Угадай число (1-6). Выигрыш: x5</p>' +
+        '<div class="bet-buttons" style="justify-content: center;">' +
+        '<button class="bet-btn" onclick="playDice(1)">1</button><button class="bet-btn" onclick="playDice(2)">2</button>' +
+        '<button class="bet-btn" onclick="playDice(3)">3</button><button class="bet-btn" onclick="playDice(4)">4</button>' +
+        '<button class="bet-btn" onclick="playDice(5)">5</button><button class="bet-btn" onclick="playDice(6)">6</button></div></div>';
 }
 
 function playDice(guess) {
@@ -999,15 +828,14 @@ function playDice(guess) {
             var result = Math.floor(Math.random() * 6) + 1;
             if (display) display.innerHTML = '<span style="font-size: 80px">' + diceEmojis[result - 1] + '</span>';
             
-            var won = result === guess;
-            if (won) {
+            if (result === guess) {
                 var win = state.selectedBet * 5;
                 state.balance += win;
                 showToast('🎯 Угадал! +' + win + ' ⭐', 'success');
                 haptic('success');
                 addToHistory('dice', state.selectedBet, true, win);
             } else {
-                showToast('Выпало ' + result + '. -' + state.selectedBet + ' ⭐', 'error');
+                showToast('Выпало ' + result, 'error');
                 haptic('error');
                 addToHistory('dice', state.selectedBet, false, 0);
             }
@@ -1017,17 +845,15 @@ function playDice(guess) {
     }, 100);
 }
 
-// Roulette (for Master rank)
+// Roulette
 function getRouletteHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="game-display" id="roulette-display"><span style="font-size: 64px">🎡</span></div>' +
-        '<p style="text-align: center; color: var(--text-secondary); margin-bottom: 16px;">Красное x2 | Чёрное x2 | Зелёное x14</p>' +
-        '<div style="display: flex; gap: 8px; justify-content: center;">' +
+        '<p style="text-align: center; color: var(--text-secondary);">Красное x2 | Чёрное x2 | Зелёное x14</p>' +
+        '<div style="display: flex; gap: 8px;">' +
         '<button class="play-btn" style="background: #e74c3c; flex: 1;" onclick="playRoulette(\'red\')">🔴</button>' +
         '<button class="play-btn" style="background: #27ae60; flex: 0.5;" onclick="playRoulette(\'green\')">🟢</button>' +
-        '<button class="play-btn" style="background: #2c3e50; flex: 1;" onclick="playRoulette(\'black\')">⚫</button>' +
-        '</div></div>';
+        '<button class="play-btn" style="background: #2c3e50; flex: 1;" onclick="playRoulette(\'black\')">⚫</button></div></div>';
 }
 
 function playRoulette(choice) {
@@ -1044,25 +870,20 @@ function playRoulette(choice) {
     
     setTimeout(function() {
         var rand = Math.random();
-        var result;
-        if (rand < 0.07) result = 'green';
-        else if (rand < 0.535) result = 'red';
-        else result = 'black';
-        
+        var result = rand < 0.07 ? 'green' : rand < 0.535 ? 'red' : 'black';
         var emoji = result === 'red' ? '🔴' : result === 'black' ? '⚫' : '🟢';
+        
         if (display) display.innerHTML = '<span style="font-size: 64px">' + emoji + '</span>';
         
-        var won = result === choice;
-        var mult = result === 'green' ? 14 : 2;
-        
-        if (won) {
+        if (result === choice) {
+            var mult = result === 'green' ? 14 : 2;
             var win = state.selectedBet * mult;
             state.balance += win;
             showToast('Победа! +' + win + ' ⭐', 'success');
             haptic('success');
             addToHistory('roulette', state.selectedBet, true, win);
         } else {
-            showToast('Выпало ' + emoji + '. -' + state.selectedBet + ' ⭐', 'error');
+            showToast('Не повезло...', 'error');
             haptic('error');
             addToHistory('roulette', state.selectedBet, false, 0);
         }
@@ -1071,14 +892,11 @@ function playRoulette(choice) {
     }, 2000);
 }
 
-// High Roller (for Legend rank)
+// High Roller
 function getHighRollerHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="game-display" style="text-align: center; padding: 20px;">' +
-        '<div style="font-size: 48px; margin-bottom: 16px;">💰</div>' +
-        '<h3 style="color: gold;">HIGH ROLLER</h3>' +
-        '<p style="color: var(--text-secondary);">Всё или ничего! 50/50 шанс удвоить ставку</p>' +
-        '</div>' +
+    return '<div class="game-content"><div class="game-display" style="text-align: center; padding: 20px;">' +
+        '<div style="font-size: 48px;">💰</div><h3 style="color: gold;">HIGH ROLLER</h3>' +
+        '<p style="color: var(--text-secondary);">50/50 шанс удвоить!</p></div>' +
         '<div class="bet-section"><h4>Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<button class="play-btn" style="background: linear-gradient(135deg, gold, #ff6b00);" onclick="playHighRoller()">💰 ВА-БАНК</button></div>';
 }
@@ -1093,34 +911,27 @@ function playHighRoller() {
     updateUI();
     
     setTimeout(function() {
-        var won = Math.random() < 0.5;
-        
-        if (won) {
+        if (Math.random() < 0.5) {
             var win = state.selectedBet * 2;
             state.balance += win;
             showToast('🎉 УДВОИЛ! +' + win + ' ⭐', 'success');
             haptic('success');
             addToHistory('highroller', state.selectedBet, true, win);
         } else {
-            showToast('💀 Всё потерял... -' + state.selectedBet + ' ⭐', 'error');
+            showToast('💀 Не повезло...', 'error');
             haptic('error');
             addToHistory('highroller', state.selectedBet, false, 0);
         }
-        
         updateUI();
     }, 1500);
 }
 
-// VIP Slots (for VIP rank)
+// VIP Slots
 function getVIPSlotsHTML(maxBet) {
-    return '<div class="game-content">' +
-        '<div class="bet-section"><h4>VIP Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
+    return '<div class="game-content"><div class="bet-section"><h4>VIP Ставка</h4><div class="bet-buttons">' + getBetButtonsHTML(maxBet) + '</div></div>' +
         '<div class="game-display"><div class="slot-reels">' +
-        '<div class="slot-reel vip" id="reel1">👑</div>' +
-        '<div class="slot-reel vip" id="reel2">👑</div>' +
-        '<div class="slot-reel vip" id="reel3">👑</div>' +
-        '</div><p style="color: gold; text-align: center; margin-top: 10px;">Увеличенные множители!</p></div>' +
-        '<button class="play-btn vip-btn" onclick="playVIPSlots()">👑 VIP КРУТИТЬ</button></div>';
+        '<div class="slot-reel vip" id="reel1">👑</div><div class="slot-reel vip" id="reel2">👑</div><div class="slot-reel vip" id="reel3">👑</div>' +
+        '</div></div><button class="play-btn vip-btn" onclick="playVIPSlots()">👑 VIP КРУТИТЬ</button></div>';
 }
 
 function playVIPSlots() {
@@ -1132,7 +943,7 @@ function playVIPSlots() {
     state.balance -= state.selectedBet;
     updateUI();
     
-    var symbols = ['💎', '👑', '🌟', '💰', '🏆', '🎭', '💫'];
+    var symbols = ['💎', '👑', '🌟', '💰', '🏆'];
     var results = [];
     
     for (var i = 1; i <= 3; i++) {
@@ -1153,7 +964,7 @@ function playVIPSlots() {
         
         var win = 0;
         if (results[0] === results[1] && results[1] === results[2]) {
-            var mults = { '💎': 50, '👑': 75, '🌟': 40, '💰': 100, '🏆': 60, '🎭': 35, '💫': 45 };
+            var mults = { '💎': 50, '👑': 75, '🌟': 40, '💰': 100, '🏆': 60 };
             win = state.selectedBet * (mults[results[0]] || 40);
         } else if (results[0] === results[1] || results[1] === results[2] || results[0] === results[2]) {
             win = Math.floor(state.selectedBet * 2.5);
@@ -1164,7 +975,7 @@ function playVIPSlots() {
             showToast('👑 VIP Победа! +' + win + ' ⭐', 'success');
             haptic('success');
         } else {
-            showToast('Не повезло... -' + state.selectedBet + ' ⭐', 'error');
+            showToast('Не повезло...', 'error');
             haptic('error');
         }
         
@@ -1174,135 +985,20 @@ function playVIPSlots() {
 }
 
 function addToHistory(game, bet, won, amount) {
-    state.history.unshift({
-        game: game,
-        bet: bet,
-        won: won,
-        amount: amount,
-        time: Date.now()
-    });
-    
+    state.history.unshift({ game: game, bet: bet, won: won, amount: amount, time: Date.now() });
     state.stats.games++;
     if (won) state.stats.wins++;
     state.stats.profit += won ? amount : -bet;
-    
     saveUserData();
     updateHistoryUI();
 }
 
-// ==================== DUELS (Team Games) ====================
+// ==================== DUELS ====================
 function updateDuelsUI() {
     var list = document.getElementById('duels-list');
     if (!list) return;
     
-    var html = '<div class="duel-create">' +
-        '<h4>⚔️ Создать дуэль</h4>' +
-        '<p>Пригласи друга и сразись за звёзды!</p>' +
-        '<div class="duel-amounts">' +
-        '<button class="duel-amount-btn" onclick="createDuel(50)">50 ⭐</button>' +
-        '<button class="duel-amount-btn" onclick="createDuel(100)">100 ⭐</button>' +
-        '<button class="duel-amount-btn" onclick="createDuel(250)">250 ⭐</button>' +
-        '</div></div>';
-    
-    html += '<div class="active-duels"><h4>Активные дуэли</h4>';
-    
-    if (state.pendingDuel) {
-        html += '<div class="duel-item pending">' +
-            '<span>Твоя дуэль: ' + state.pendingDuel.amount + ' ⭐</span>' +
-            '<button class="cancel-duel-btn" onclick="cancelDuel()">Отменить</button>' +
-            '</div>';
-    }
-    
-    // Demo duels
-    var demoDuels = [
-        { creator: 'Player123', amount: 100 },
-        { creator: 'GamerPro', amount: 250 },
-        { creator: 'LuckyBoy', amount: 50 }
-    ];
-    
-    for (var i = 0; i < demoDuels.length; i++) {
-        var d = demoDuels[i];
-        html += '<div class="duel-item">' +
-            '<span>' + d.creator + ': ' + d.amount + ' ⭐</span>' +
-            '<button class="join-duel-btn" onclick="joinDuel(\'' + d.creator + '\', ' + d.amount + ')">Принять</button>' +
-            '</div>';
-    }
-    
-    html += '</div>';
-    
-    list.innerHTML = html;
-}
-
-function createDuel(amount) {
-    if (state.balance < amount) {
-        showToast('Недостаточно средств!', 'error');
-        return;
-    }
-    
-    if (state.pendingDuel) {
-        showToast('У вас уже есть активная дуэль!', 'error');
-        return;
-    }
-    
-    state.balance -= amount;
-    state.pendingDuel = { amount: amount, createdAt: Date.now() };
-    
-    updateUI();
-    updateDuelsUI();
-    saveUserData();
-    
-    // Generate invite link
-    var inviteLink = 'https://t.me/share/url?url=Присоединяйся к дуэли за ' + amount + ' ⭐!';
-    
-    showToast('Дуэль создана! Поделись ссылкой с другом', 'success');
-    
-    // Try to share via Telegram
-    if (tg && tg.openTelegramLink) {
-        tg.openTelegramLink(inviteLink);
-    }
-}
-
-function cancelDuel() {
-    if (!state.pendingDuel) return;
-    
-    state.balance += state.pendingDuel.amount;
-    state.pendingDuel = null;
-    
-    updateUI();
-    updateDuelsUI();
-    saveUserData();
-    
-    showToast('Дуэль отменена, средства возвращены', 'success');
-}
-
-function joinDuel(creator, amount) {
-    if (state.balance < amount) {
-        showToast('Недостаточно средств!', 'error');
-        return;
-    }
-    
-    state.balance -= amount;
-    updateUI();
-    
-    // Simulate duel
-    setTimeout(function() {
-        var won = Math.random() < 0.5;
-        
-        if (won) {
-            var winAmount = amount * 2;
-            state.balance += winAmount;
-            showToast('⚔️ Победа в дуэли! +' + winAmount + ' ⭐', 'success');
-            haptic('success');
-            addToHistory('duel', amount, true, winAmount);
-        } else {
-            showToast('⚔️ Поражение... -' + amount + ' ⭐', 'error');
-            haptic('error');
-            addToHistory('duel', amount, false, 0);
-        }
-        
-        updateUI();
-        updateDuelsUI();
-    }, 2000);
+    list.innerHTML = '<div class="duel-create"><h4>⚔️ Дуэли</h4><p>Скоро!</p></div>';
 }
 
 // ==================== CASES ====================
@@ -1334,22 +1030,16 @@ var cases = {
 };
 
 function openCase(type) {
-    console.log('📦 openCase:', type);
-    
     var caseData = cases[type];
-    if (!caseData) {
-        showToast('Неизвестный кейс', 'error');
-        return;
-    }
+    if (!caseData) return;
     
     if (state.balance < caseData.price) {
         showToast('Недостаточно средств!', 'error');
-        haptic('error');
         return;
     }
     
     state.balance -= caseData.price;
-    state.casesOpened = (state.casesOpened || 0) + 1;
+    state.casesOpened++;
     updateUI();
     
     var roll = Math.random();
@@ -1371,12 +1061,11 @@ function openCase(type) {
     var gameTitle = document.getElementById('game-title');
     var gameBody = document.getElementById('game-body');
     
-    if (gameTitle) gameTitle.textContent = '📦 Открытие кейса';
+    if (gameTitle) gameTitle.textContent = '📦 Кейс открыт!';
     if (gameBody) gameBody.innerHTML = '<div class="result-display animate-in">' +
         '<div class="result-icon">' + reward.icon + '</div>' +
         '<div class="result-text">' + reward.name + '</div>' +
         '<div class="result-amount win">' + reward.value + ' ⭐</div>' +
-        '<p style="color: var(--text-secondary); margin: 16px 0;">Добавлено в инвентарь</p>' +
         '<button class="play-btn" onclick="closeGame()">Отлично!</button></div>';
     
     openModal('game-modal');
@@ -1384,14 +1073,11 @@ function openCase(type) {
     showToast('Получен: ' + reward.name + '!', 'success');
 }
 
-// ==================== DEPOSIT (REAL TON) ====================
+// ==================== DEPOSIT ====================
 function updateDepositUI() {
     var depositInfo = document.getElementById('deposit-info');
     if (depositInfo) {
-        depositInfo.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px; text-align: center;">' +
-            '1 TON = ' + CONFIG.TON_TO_STARS + ' ⭐<br>' +
-            'Минимум: 0.1 TON<br>' +
-            'Кошелёк: <code style="font-size: 10px;">' + CONFIG.DEPOSIT_WALLET.slice(0, 10) + '...</code></p>';
+        depositInfo.innerHTML = '<p style="color: var(--text-secondary); font-size: 14px; text-align: center;">1 TON = ' + CONFIG.TON_TO_STARS + ' ⭐</p>';
     }
 }
 
@@ -1399,9 +1085,7 @@ function selectDeposit(amountStars) {
     state.selectedDeposit = amountStars;
     document.querySelectorAll('.amount-btn').forEach(function(btn) {
         btn.classList.remove('selected');
-        if (btn.textContent.includes(amountStars)) {
-            btn.classList.add('selected');
-        }
+        if (btn.textContent.includes(amountStars)) btn.classList.add('selected');
     });
     
     var depositBtn = document.getElementById('deposit-btn');
@@ -1419,27 +1103,42 @@ async function processDeposit() {
     }
     
     if (!state.tonWallet) {
-        showToast('Сначала подключите TON кошелёк!', 'error');
+        showToast('Подключите TON кошелёк!', 'error');
         return;
     }
     
     var amountTON = state.selectedDeposit / CONFIG.TON_TO_STARS;
     
-    var success = await sendTONTransaction(amountTON);
+    if (amountTON < CONFIG.MIN_DEPOSIT_TON) {
+        showToast('Минимум: ' + CONFIG.MIN_DEPOSIT_TON + ' TON', 'error');
+        return;
+    }
     
-    if (success) {
-        state.balance += state.selectedDeposit;
-        state.totalDeposited += state.selectedDeposit;
+    var depositBtn = document.getElementById('deposit-btn');
+    if (depositBtn) {
+        depositBtn.disabled = true;
+        depositBtn.textContent = 'Обработка...';
+    }
+    
+    var result = await sendTONTransaction(amountTON);
+    
+    if (result.success) {
+        showToast('⏳ Транзакция отправлена!', 'info');
         
-        updateUI();
-        saveUserData();
+        sendToBot('deposit', { 
+            amount_ton: amountTON, 
+            amount_stars: state.selectedDeposit,
+            wallet: state.tonWallet?.account?.address || 'unknown',
+            tx_hash: result.txHash || ''
+        });
         
-        // Notify bot about deposit
-        notifyDeposit(amountTON, state.selectedDeposit);
-        
-        showToast('✅ Пополнено: +' + state.selectedDeposit + ' ⭐', 'success');
         haptic('success');
         closeWallet();
+    }
+    
+    if (depositBtn) {
+        depositBtn.disabled = false;
+        depositBtn.textContent = 'Оплатить ' + amountTON.toFixed(2) + ' TON';
     }
 }
 
@@ -1448,15 +1147,11 @@ var selectedWithdrawMethod = null;
 
 function selectWithdrawMethod(method) {
     selectedWithdrawMethod = method;
-    
     var inputSection = document.getElementById('withdraw-input-section');
     var input = document.getElementById('withdraw-amount-input');
     
     if (inputSection) inputSection.style.display = 'block';
-    if (input) {
-        input.max = state.balance;
-        input.placeholder = 'Минимум ' + CONFIG.MIN_WITHDRAW_STARS + ' ⭐';
-    }
+    if (input) input.max = state.balance;
 }
 
 function processWithdraw() {
@@ -1478,20 +1173,24 @@ function processWithdraw() {
         return;
     }
     
+    if (amount > CONFIG.MAX_WITHDRAW_STARS) {
+        showToast('Максимум ' + CONFIG.MAX_WITHDRAW_STARS + ' ⭐', 'error');
+        return;
+    }
+    
     if (amount > state.balance) {
         showToast('Недостаточно средств', 'error');
         return;
     }
     
-    state.balance -= amount;
-    updateUI();
-    saveUserData();
-    
-    // Notify bot about withdrawal request
-    notifyWithdraw(amount, selectedWithdrawMethod);
+    sendToBot('withdraw_request', { 
+        amount_stars: amount, 
+        method: selectedWithdrawMethod,
+        wallet: state.tonWallet?.account?.address || ''
+    });
     
     var tonAmount = amount / CONFIG.TON_TO_STARS;
-    showToast('📤 Заявка на вывод ' + tonAmount.toFixed(2) + ' TON создана!', 'success');
+    showToast('📤 Заявка на ' + tonAmount.toFixed(2) + ' TON создана!', 'success');
     haptic('success');
     closeWithdraw();
 }
@@ -1501,27 +1200,19 @@ function initDailyBonus() {
     var today = new Date().toDateString();
     var bonusEl = document.getElementById('daily-bonus');
     var statusEl = document.getElementById('bonus-status');
-    var amountEl = document.getElementById('bonus-amount');
-    var streakEl = document.getElementById('bonus-streak');
     
     if (state.lastDailyBonus === today) {
         if (bonusEl) bonusEl.classList.add('claimed');
-        if (statusEl) {
-            statusEl.textContent = 'Получен!';
-            statusEl.style.color = 'var(--text-muted)';
-        }
+        if (statusEl) statusEl.textContent = 'Получен!';
     } else {
         if (bonusEl) bonusEl.classList.remove('claimed');
-        if (statusEl) {
-            statusEl.textContent = 'Доступен!';
-            statusEl.style.color = 'var(--success)';
-        }
+        if (statusEl) statusEl.textContent = 'Доступен!';
     }
     
     var streakBonus = Math.min(state.dailyStreak, 7);
     var bonusAmount = 50 + (streakBonus * 10);
+    var amountEl = document.getElementById('bonus-amount');
     if (amountEl) amountEl.textContent = '+' + bonusAmount + ' ⭐';
-    if (streakEl) streakEl.textContent = 'День ' + (state.dailyStreak + 1);
 }
 
 function claimDailyBonus() {
@@ -1553,24 +1244,6 @@ function claimDailyBonus() {
     
     showToast('🎁 Бонус: +' + bonusAmount + ' ⭐', 'success');
     haptic('success');
-}
-
-// ==================== ACHIEVEMENTS ====================
-function initAchievements() {
-    var cards = document.querySelectorAll('.achievement-card');
-    var unlocked = 0;
-    
-    cards.forEach(function(card) {
-        var id = card.dataset.id;
-        if (state.achievements[id]) {
-            card.classList.remove('locked');
-            card.classList.add('unlocked');
-            unlocked++;
-        }
-    });
-    
-    var progress = document.getElementById('ach-progress');
-    if (progress) progress.textContent = unlocked + '/' + cards.length;
 }
 
 // ==================== JACKPOT ====================
@@ -1606,9 +1279,7 @@ function showToast(text, type) {
     
     if (toast) {
         toast.className = 'toast show ' + (type || '');
-        setTimeout(function() {
-            toast.classList.remove('show');
-        }, 3000);
+        setTimeout(function() { toast.classList.remove('show'); }, 3000);
     }
 }
 
@@ -1616,7 +1287,7 @@ function showAllCases() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ==================== MAKE GLOBAL ====================
+// ==================== GLOBAL ====================
 window.switchTab = switchTab;
 window.openWallet = openWallet;
 window.closeWallet = closeWallet;
@@ -1652,7 +1323,6 @@ window.processDeposit = processDeposit;
 window.selectWithdrawMethod = selectWithdrawMethod;
 window.processWithdraw = processWithdraw;
 window.connectTON = connectTON;
-window.connectMetamask = connectMetamask;
 window.sellItem = sellItem;
 window.withdrawAll = withdrawAll;
 window.filterHistory = filterHistory;
@@ -1660,6 +1330,3 @@ window.switchLeaderboard = switchLeaderboard;
 window.claimDailyBonus = claimDailyBonus;
 window.showAllCases = showAllCases;
 window.toggleSetting = toggleSetting;
-window.createDuel = createDuel;
-window.cancelDuel = cancelDuel;
-window.joinDuel = joinDuel;
